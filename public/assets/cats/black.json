@@ -1,0 +1,19 @@
+{
+  "id": "black",
+  "name": "Pepper",
+  "image": "assets/cats/black.png",
+  "cellW": 182,
+  "cellH": 134,
+  "footX": 91,
+  "footY": 131,
+  "walkH": 115,
+  "rows": [
+    "walk",
+    "play",
+    "attack",
+    "jump",
+    "sleep"
+  ],
+  "frames": 4,
+  "facing": "right"
+}

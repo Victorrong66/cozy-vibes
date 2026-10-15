@@ -14,6 +14,10 @@ on phones and laptops alike.
   where the green blanket meets the white sheet, onto the couch only from the coffee
   table side, and into the desk chair from the front. Move again to get up. The bed,
   couch, desk, TV, coffee table and dining table are solid otherwise.
+- **Cats:** Biscuit (the tabby) and Pepper (the black cat) roam the house on their own.
+  They wander, nap on the bed, cushion, beanbag or hallway rug, play with yarn and come
+  hang out by people. Everyone in a house sees the same cats. Tap one to pet it, play
+  with it, tease it (it swats and runs off) or call it over.
 - **Yourself:** tap your own character to sit, nap, dance, emote or change your look.
 - **Chat:** type in the box at the bottom (or press Enter on a keyboard). Messages
   show up as speech bubbles.
@@ -66,6 +70,7 @@ npm run deploy
 | File | What it does |
 | --- | --- |
 | `src/room.js` | The multiplayer server logic for one house: joining, movement, actions, chat. It rejects positions inside walls. |
+| `src/cats.js` | The two house cats: what they decide to do and how they react to people. |
 | `worker/index.js` | Cloudflare entry point: one Durable Object per house code, each running a `Room`. |
 | `server.js` | The same `Room` on plain Node, for running locally or on any Node host. |
 | `public/js/map.js` | The floor plan: walkable areas, doors, blockers, collision and pathfinding. The server and browser share it. |
@@ -91,6 +96,10 @@ a `.json` file with the frame size. If you edit the sheet, re-run it:
 pip install pillow numpy
 python3 tools/extract_sprites.py
 ```
+
+The cats come from `art/cats-sheet.png` the same way: `python3 tools/extract_cats.py`
+writes `public/assets/cats/`. Their behaviour lives in `src/cats.js` and runs on the
+server, so everyone sees the same cats.
 
 To add another character, add its frames to the sheet (or a new one), add an entry to
 `CHARACTERS` in the script, and add its id to `IDS` in `public/js/characters.js`.

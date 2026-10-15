@@ -1,5 +1,6 @@
 import { MAP_W, MAP_H, FURNITURE, isWalkable, moveWithCollision, findPath, roomAt, furnitureAt } from './map.js';
 import { LOOKS, CHAR_H, loadCharacters, charWidth, drawCharacter, drawPortrait } from './characters.js';
+import { CAT_H, loadCats, drawCat, drawCatPortrait } from './cats.js';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -23,6 +24,7 @@ const state = {
   effects: [], // floating emojis
   ripples: [], // tap markers
   zoomMul: 1,
+  cats: new Map(), // id -> cat (run by the server)
 };
 
 // The local player's movement intent.
@@ -173,6 +175,8 @@ function onMessage(msg) {
       state.myId = msg.id;
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, makePlayer(p));
+      state.cats.clear();
+      for (const c of msg.cats || []) updateCat(c);
       const mine = state.players.get(msg.id);
       if (prev && isWalkable(prev.x, prev.y)) {
         // Reconnected: keep standing where we were.
@@ -234,6 +238,13 @@ function onMessage(msg) {
       if (p) p.bubble = { text: msg.text, until: performance.now() + 5000 + msg.text.length * 60 };
       break;
     }
+    case 'cats':
+      for (const c of msg.c) updateCat(c);
+      break;
+    case 'catfx':
+      addEffect(msg.id, msg.emoji);
+      if (msg.by === state.myId) toast(msg.text);
+      break;
     case 'emote':
       addEffect(msg.from, msg.emoji);
       break;
@@ -242,6 +253,24 @@ function onMessage(msg) {
       break;
   }
 }
+
+function updateCat([id, x, y, flip, anim, n]) {
+  let c = state.cats.get(id);
+  if (!c) {
+    c = { id, cat: true, x, y, tx: x, ty: y, flip, anim, n, started: performance.now() };
+    state.cats.set(id, c);
+  }
+  c.tx = x;
+  c.ty = y;
+  c.flip = !!flip;
+  if (c.n !== n || c.anim !== anim) {
+    c.anim = anim;
+    c.n = n;
+    c.started = performance.now();
+  }
+}
+
+const CAT_NAMES = { tabby: 'Biscuit', black: 'Pepper' };
 
 function updateCount() {
   $('playerCount').textContent = state.players.size;
@@ -392,6 +421,11 @@ function stopFollowing() {
   }
 }
 
+// A player (numeric id) or a cat (string id).
+function entity(id) {
+  return state.players.get(id) || state.cats.get(id);
+}
+
 function addEffect(playerId, emoji, opts = {}) {
   state.effects.push({ playerId, emoji, t0: performance.now(), ...opts });
 }
@@ -468,13 +502,70 @@ function openMenu(id, screenX, screenY) {
     add('🚶 Walk over', () => walkTo(p.x, p.y + 20), 'wide');
   }
 
+  placeMenu(screenX, screenY);
+}
+
+function placeMenu(screenX, screenY) {
+  const menu = $('actionMenu');
   menu.classList.remove('hidden');
-  const r = menu.getBoundingClientRect();
+  // Layout size, not getBoundingClientRect: the pop-in animation scales it down.
+  const r = { width: menu.offsetWidth, height: menu.offsetHeight };
   const x = Math.min(Math.max(8, screenX - r.width / 2), innerWidth - r.width - 8);
   let y = screenY + 16;
   if (y + r.height > innerHeight - 70) y = Math.max(8, screenY - r.height - 70);
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
+}
+
+const CAT_ACTIONS = {
+  pet: { label: '🤚 Pet', near: true },
+  play: { label: '🧶 Play', near: true },
+  tease: { label: '😼 Tease', near: true },
+  call: { label: '🐾 Call over', near: false },
+};
+
+const CAT_MOODS = {
+  sleep: 'Fast asleep',
+  play: 'Playing with yarn',
+  walk: 'Wandering around',
+  loaf: 'Loafing',
+  attack: 'Feeling feisty',
+  jump: 'Mid-jump!',
+  idle: 'Just hanging out',
+};
+
+function openCatMenu(c, screenX, screenY) {
+  menuTarget = c.id;
+  const menu = $('actionMenu');
+  drawCatPortrait($('menuPortrait'), c.id);
+  $('menuName').textContent = CAT_NAMES[c.id] || 'Cat';
+  $('menuSub').textContent = `${CAT_MOODS[c.anim] || 'Being a cat'} · ${roomAt(c.x, c.y) === 'doorway' ? 'in a doorway' : 'in the ' + roomAt(c.x, c.y)}`;
+  const box = $('menuButtons');
+  box.innerHTML = '';
+  for (const [action, a] of Object.entries(CAT_ACTIONS)) {
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.textContent = a.label;
+    b.addEventListener('click', () => {
+      doCatAction(c.id, action);
+      closeMenu();
+    });
+    box.append(b);
+  }
+  placeMenu(screenX, screenY);
+}
+
+function doCatAction(id, action) {
+  const mine = state.players.get(state.myId);
+  const c = state.cats.get(id);
+  if (!mine || !c) return;
+  if (CAT_ACTIONS[action].near && !closeEnough(mine, c)) {
+    me.follow = null;
+    me.pending = { target: id, action, cat: true };
+    walkTo(c.x, c.y);
+    return;
+  }
+  send({ t: 'cat', id, action });
 }
 
 function closeMenu() {
@@ -594,6 +685,11 @@ canvas.addEventListener('pointerup', (e) => {
     return;
   }
   const w = screenToWorld(e.clientX, e.clientY);
+  const cat = pickCat(w.x, w.y);
+  if (cat) {
+    openCatMenu(cat, e.clientX, e.clientY);
+    return;
+  }
   const hit = pickPlayer(w.x, w.y);
   if (hit) {
     openMenu(hit.id, e.clientX, e.clientY);
@@ -610,6 +706,14 @@ canvas.addEventListener('pointerup', (e) => {
   walkTo(w.x, w.y);
   state.ripples.push({ x: w.x, y: w.y, t0: performance.now(), ok: !!me.path });
 });
+
+function pickCat(wx, wy) {
+  const pad = 6 / view.zoom;
+  for (const c of [...state.cats.values()].sort((a, b) => b.y - a.y)) {
+    if (Math.abs(wx - c.x) <= 22 + pad && wy >= c.y - CAT_H - pad && wy <= c.y + 5 + pad) return c;
+  }
+  return null;
+}
 
 function pickPlayer(wx, wy) {
   // Front-most (largest y) first; generous hit box for fingers.
@@ -733,11 +837,12 @@ function updateMe(dt, now) {
   }
   // Walking over to do something: re-plan if they move.
   if (me.pending && now > me.repathAt) {
-    const t = state.players.get(me.pending.target);
+    const t = me.pending.cat ? state.cats.get(me.pending.target) : state.players.get(me.pending.target);
     me.repathAt = now + 400;
     if (!t) me.pending = null;
     else if (closeEnough(mine, t)) {
-      send({ t: 'action', target: t.id, action: me.pending.action });
+      if (me.pending.cat) send({ t: 'cat', id: t.id, action: me.pending.action });
+      else send({ t: 'action', target: t.id, action: me.pending.action });
       me.pending = null;
       me.path = null;
     } else me.path = findPath(mine.x, mine.y, t.x, t.y);
@@ -794,6 +899,15 @@ function updateMe(dt, now) {
 
 function updateOthers(dt) {
   const k = 1 - Math.exp(-dt * 12);
+  for (const c of state.cats.values()) {
+    if (Math.hypot(c.tx - c.x, c.ty - c.y) > 150) {
+      c.x = c.tx;
+      c.y = c.ty;
+    } else {
+      c.x += (c.tx - c.x) * k;
+      c.y += (c.ty - c.y) * k;
+    }
+  }
   for (const p of state.players.values()) {
     if (p.id === state.myId) continue;
     const d = Math.hypot(p.tx - p.x, p.ty - p.y);
@@ -875,7 +989,18 @@ function render(now) {
   }
 
   const list = [...state.players.values()].sort((a, b) => a.y - b.y);
-  for (const p of list) drawPlayer(p, now);
+  const scene = [...list, ...state.cats.values()].sort((a, b) => a.y - b.y);
+  for (const e of scene) {
+    if (e.cat) {
+      if (e.anim !== 'jump') {
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.beginPath();
+        ctx.ellipse(e.x, e.y, 14, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      drawCat(ctx, e.id, e.x, e.y, e.flip, e.anim, now - e.started, now);
+    } else drawPlayer(e, now);
+  }
 
   // Screen-space overlay: names, bubbles, effects (crisp text at any zoom)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -982,13 +1107,13 @@ function wrap(text, maxW) {
 
 function drawEffects(now) {
   const DUR = 1600;
-  state.effects = state.effects.filter((e) => now - e.t0 < DUR && state.players.has(e.playerId));
+  state.effects = state.effects.filter((e) => now - e.t0 < DUR && entity(e.playerId));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const e of state.effects) {
     const t = (now - e.t0) / DUR;
-    const p = state.players.get(e.playerId);
-    let wx = p.x, wy = p.y - CHAR_H - 10;
+    const p = entity(e.playerId);
+    let wx = p.x, wy = p.y - (p.cat ? CAT_H + 6 : CHAR_H + 10);
     const other = state.players.get(e.flyTo ?? e.midTo);
     if (other && e.flyTo != null) {
       wx = p.x + (other.x - p.x) * t;
@@ -1037,7 +1162,7 @@ function loop(now) {
 // Debug hook for automated tests.
 window.__cozy = { state, me, walkTo, view };
 
-loadCharacters().then(() => {
+Promise.all([loadCharacters(), loadCats()]).then(() => {
   profile.look = ((profile.look % LOOKS.length) + LOOKS.length) % LOOKS.length;
   initJoin();
   requestAnimationFrame(loop);

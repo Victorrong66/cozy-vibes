@@ -6,6 +6,7 @@
 // 'close'), which both the `ws` package and Cloudflare's WebSocket provide.
 
 import { SPAWN, isWalkable, isValidSpot } from '../public/js/map.js';
+import { Cats } from './cats.js';
 
 export const MAX_PLAYERS = 16;
 const TICK_MS = 66; // ~15 movement broadcasts per second
@@ -14,6 +15,7 @@ const IDLE_KICK_MS = 45000; // clients check in at least every 2s while open
 const ACTIONS = new Set(['wave', 'highfive', 'hug', 'heart', 'poke', 'dance', 'follow', 'unfollow']);
 const POSES = new Set(['stand', 'sit', 'sleep', 'dance', 'bed']);
 const DIRS = new Set(['up', 'down', 'left', 'right']);
+const CAT_ACTIONS = new Set(['pet', 'play', 'tease', 'call']);
 const EMOTES = new Set(['😀', '😂', '😍', '😮', '😢', '😡', '👍', '💤', '🎉', '❤️']);
 const OPEN = 1;
 
@@ -43,6 +45,7 @@ export class Room {
     this.nextId = 1;
     this.timer = null;
     this.onEmpty = onEmpty;
+    this.cats = new Cats();
   }
 
   // Wire up a freshly opened socket. The first message must be a join.
@@ -94,7 +97,7 @@ export class Room {
       player.y = SPAWN.y;
     }
     this.players.set(player.id, player);
-    this.sendTo(player, { t: 'welcome', id: player.id, room: this.code, players: [...this.players.values()].map(publicPlayer) });
+    this.sendTo(player, { t: 'welcome', id: player.id, room: this.code, players: [...this.players.values()].map(publicPlayer), cats: this.cats.snapshot() });
     this.broadcast({ t: 'join', player: publicPlayer(player) }, player.id);
     if (!this.timer) this.timer = setInterval(() => this.tick(), TICK_MS);
     return player;
@@ -134,6 +137,15 @@ export class Room {
         this.broadcast({ t: 'chat', from: player.id, text });
         break;
       }
+      case 'cat': {
+        if (!CAT_ACTIONS.has(msg.action)) return;
+        const now = Date.now();
+        if (now - (player.lastCat || 0) < 400) return;
+        player.lastCat = now;
+        const fx = this.cats.interact(player, String(msg.id), msg.action);
+        if (fx) this.broadcast({ t: 'catfx', by: player.id, action: msg.action, ...fx });
+        break;
+      }
       case 'profile':
         player.name = clean(msg.name, 16) || player.name;
         player.look = cleanLook(msg.look, player.look);
@@ -171,6 +183,11 @@ export class Room {
       }
     }
     if (changed.length) this.broadcast({ t: 's', p: changed });
+    // Real time since the last tick, so cats keep pace even if timers drift.
+    const dt = Math.min(250, now - (this.lastTick || now - TICK_MS));
+    this.lastTick = now;
+    const cats = this.cats.update(dt, [...this.players.values()]);
+    if (cats.length) this.broadcast({ t: 'cats', c: cats });
   }
 
   sendTo(player, msg) {

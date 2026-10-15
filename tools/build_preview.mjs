@@ -20,7 +20,12 @@ const meta = {};
 for (const id of ['boy', 'girl']) {
   const m = JSON.parse(fs.readFileSync(path.join(PUB, 'assets/characters', `${id}.json`), 'utf8'));
   m.image = dataUri(path.join(PUB, 'assets/characters', `${id}.png`), 'image/png');
-  meta[id] = m;
+  meta[`characters/${id}`] = m;
+}
+for (const id of ['tabby', 'black']) {
+  const m = JSON.parse(fs.readFileSync(path.join(PUB, 'assets/cats', `${id}.json`), 'utf8'));
+  m.image = dataUri(path.join(PUB, 'assets/cats', `${id}.png`), 'image/png');
+  meta[`cats/${id}`] = m;
 }
 const gen = path.join(ROOT, 'tools/preview/assets.gen.js');
 fs.writeFileSync(

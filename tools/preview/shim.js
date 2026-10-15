@@ -8,10 +8,10 @@ import { HOUSE_SRC, CHARACTER_META } from './assets.gen.js';
 
 window.COZY_HOUSE_SRC = HOUSE_SRC;
 
-// Serve the character sheets' metadata from memory.
+// Serve the character and cat sheets' metadata from memory.
 const realFetch = window.fetch.bind(window);
 window.fetch = (url, opts) => {
-  const m = String(url).match(/assets\/characters\/(\w+)\.json$/);
+  const m = String(url).match(/assets\/((?:characters|cats)\/\w+)\.json$/);
   if (m && CHARACTER_META[m[1]]) {
     return Promise.resolve(new Response(JSON.stringify(CHARACTER_META[m[1]]), { headers: { 'Content-Type': 'application/json' } }));
   }
