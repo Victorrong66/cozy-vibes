@@ -1,4 +1,4 @@
-"""Cut the character animation frames out of art/characters-sheet.png.
+"""Cut the boy's animation frames out of art/characters-sheet.png.
 
 The sheet has two characters side by side (boy on the left, girl on the right),
 each with four rows: down, up, left, right. The gray background and the soft
@@ -30,7 +30,7 @@ DIRS = ['down', 'up', 'left', 'right']
 ROWS = [(85, 250), (305, 475), (530, 702), (760, 932)]
 CHARACTERS = [
     {'id': 'boy', 'name': 'Boy', 'x': (100, 770), 'frames': 7},
-    {'id': 'girl', 'name': 'Girl', 'x': (895, 1515), 'frames': 6},
+    # The girl now comes from art/girl-sheet.png (tools/extract_girl.py).
 ]
 
 

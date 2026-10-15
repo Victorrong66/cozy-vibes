@@ -2,15 +2,22 @@
   "id": "girl",
   "name": "Girl",
   "image": "assets/characters/girl.png",
-  "cellW": 98,
-  "cellH": 158,
-  "footX": 49,
-  "footY": 156,
+  "cellW": 182,
+  "cellH": 150,
+  "footX": 91,
+  "footY": 147,
+  "walkH": 143,
   "rows": [
     "down",
     "up",
     "left",
-    "right"
+    "right",
+    "play",
+    "attack",
+    "jump",
+    "sleep"
   ],
-  "frames": 6
+  "frames": 8,
+  "walkFrames": 8,
+  "extraFrames": 4
 }

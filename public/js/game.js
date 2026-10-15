@@ -371,6 +371,7 @@ function onAction(from, to, action) {
       faceEachOther(a, b);
       break;
     case 'highfive':
+      a.actionAnim = { row: 'jump', start: performance.now(), dur: 600 };
       addEffect(from, '✋');
       addEffect(to, '✋');
       addEffect(from, '✨', { midTo: to });
@@ -388,6 +389,7 @@ function onAction(from, to, action) {
       if (toMe) toast(`${a.name} sent you some love ❤️`);
       break;
     case 'poke':
+      a.actionAnim = { row: 'attack', start: performance.now(), dur: 600 };
       addEffect(to, '❗');
       b.shakeUntil = performance.now() + 500;
       if (toMe) toast(`${a.name} poked you 👉`);
@@ -1321,7 +1323,14 @@ function drawPlayer(p, now) {
     ctx.stroke();
   }
 
-  drawCharacter(ctx, p.look, sx, p.y, p.dir, moving, p.pose, now, p.animT);
+  let action = null;
+  if (p.actionAnim) {
+    const ms = performance.now() - p.actionAnim.start;
+    if (ms < p.actionAnim.dur && !p.moving) action = { row: p.actionAnim.row, ms };
+    else p.actionAnim = null;
+  }
+  // Seats are on furniture, which isn't walkable floor.
+  drawCharacter(ctx, p.look, sx, p.y, p.dir, moving, p.pose, now, p.animT, { seated: !isWalkable(p.x, p.y), action });
 }
 
 function drawLabels(p, now) {
@@ -1450,7 +1459,7 @@ function loop(now) {
 }
 
 // Debug hook for automated tests.
-window.__cozy = { state, me, walkTo, view };
+window.__cozy = { state, me, walkTo, view, send };
 
 Promise.all([loadCharacters(), loadCats()]).then(() => {
   profile.look = ((profile.look % LOOKS.length) + LOOKS.length) % LOOKS.length;

@@ -107,15 +107,17 @@ where people can stand, add to `BLOCKERS` for solid furniture, or add to `FURNIT
 
 ### Characters
 
-The boy and girl come from `art/characters-sheet.png`.
-`tools/extract_sprites.py` cuts the frames out, removes the gray background and
-shadow, and lines every frame up on the character's feet. It writes
-`public/assets/characters/<id>.png` (one row per direction, one column per frame) plus
-a `.json` file with the frame size. If you edit the sheet, re-run it:
+The boy comes from `art/characters-sheet.png` (`tools/extract_sprites.py`). The girl comes
+from `art/girl-sheet.png` (`tools/extract_girl.py`), which also has play, attack, jump and
+sleep animations: she plays with her yarn when sitting on the floor, curls up to nap,
+jumps when dancing or high-fiving, and swings when poking. The scripts remove the
+background and line every frame up on the feet, writing `public/assets/characters/<id>.png`
+plus a `.json` with the frame layout. If you edit a sheet, re-run its script:
 
 ```bash
 pip install pillow numpy
-python3 tools/extract_sprites.py
+python3 tools/extract_sprites.py   # boy
+python3 tools/extract_girl.py      # girl
 ```
 
 The cats come from `art/cats-sheet.png` the same way: `python3 tools/extract_cats.py`
