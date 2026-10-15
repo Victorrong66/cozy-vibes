@@ -46,7 +46,22 @@ class End {
   }
 }
 
-const room = new Room('preview');
+// The preview keeps its house memory and save files in this browser.
+const STORE_KEY = 'cozy-preview-house';
+const room = new Room('preview', () => {}, {
+  load: async () => {
+    try {
+      return JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    } catch {
+      return null;
+    }
+  },
+  save: async (data) => {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(data));
+    } catch {}
+  },
+});
 
 function openPair() {
   const client = new End();
@@ -122,6 +137,20 @@ function startBot(name, look, startDelay) {
       const me = msg.players.find((p) => p.id === msg.id);
       bot.x = me.x;
       bot.y = me.y;
+      // The house may remember the bot napping or sitting somewhere.
+      bot.dir = me.dir;
+      bot.pose = me.pose;
+      bot.seat = FURNITURE.flatMap((f) => f.seats).find((s) => Math.abs(s.x - me.x) < 1 && Math.abs(s.y - me.y) < 1) || null;
+    } else if (msg.t === 'moveto') {
+      // A save was loaded.
+      bot.path = null;
+      bot.goingToSeat = null;
+      bot.x = msg.x;
+      bot.y = msg.y;
+      bot.dir = msg.dir;
+      bot.pose = msg.pose;
+      bot.seat = FURNITURE.flatMap((f) => f.seats).find((s) => Math.abs(s.x - msg.x) < 1 && Math.abs(s.y - msg.y) < 1) || null;
+      bot.waitUntil = performance.now() + 8000;
     } else if (msg.t === 's') {
       for (const [id, x, y] of msg.p) if (id !== bot.id) others.set(id, [x, y]);
     } else if (msg.t === 'leave') {
@@ -145,7 +174,7 @@ function startBot(name, look, startDelay) {
     }
   });
 
-  setTimeout(() => send({ t: 'join', name, look }), startDelay);
+  setTimeout(() => send({ t: 'join', name, look, token: `preview-bot-${name.toLowerCase()}` }), startDelay);
 
   let last = performance.now();
   setInterval(() => {

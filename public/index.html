@@ -16,6 +16,7 @@
   <div id="hud" class="hidden">
     <div class="pill" id="roomPill">🏡 <span id="roomName"></span> · <span id="playerCount">1</span> here</div>
     <button class="pill btn" id="inviteBtn">🔗 Invite</button>
+    <button class="pill btn round" id="savesBtn" aria-label="Saves">💾</button>
     <div class="spacer"></div>
     <button class="pill btn hidden" id="recenterBtn" aria-label="Back to my character">📍 Me</button>
     <button class="pill btn round" id="zoomOut" aria-label="Zoom out">−</button>
@@ -49,6 +50,22 @@
       <button class="close" id="menuClose" aria-label="Close">✕</button>
     </div>
     <div id="menuButtons"></div>
+  </div>
+
+  <!-- Save files -->
+  <div id="savesPanel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="savesTitle">
+    <div class="card saves-card">
+      <div class="saves-head">
+        <h2 id="savesTitle">Saves</h2>
+        <button class="close" id="savesClose" aria-label="Close">✕</button>
+      </div>
+      <p class="sub">Save where everyone and the cats are, then come back to it any time. Loading puts everyone back in their spot.</p>
+      <form id="saveForm" autocomplete="off">
+        <input id="saveName" maxlength="40" placeholder="Name this save, e.g. Movie night" />
+        <button class="btn primary" type="submit">Save</button>
+      </form>
+      <div id="savesList"></div>
+    </div>
   </div>
 
   <div id="toasts"></div>

@@ -314,3 +314,48 @@ body.touch.chatting #chatForm { display: flex; }
 body.touch.chatting #chatBtn,
 body.touch.chatting #emoteBtn,
 body.touch.chatting #joystick { display: none; }
+
+/* ---- Save files ---- */
+
+#savesPanel {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(20, 35, 16, 0.55);
+  z-index: 15;
+}
+.saves-card { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.saves-head { display: flex; align-items: center; justify-content: space-between; }
+.saves-head h2 { margin: 0; color: var(--wood); font-size: 1.5rem; }
+.saves-head .close { border: none; background: transparent; font-size: 1.2rem; cursor: pointer; padding: 6px; }
+#saveForm { display: flex; gap: 6px; margin-bottom: 14px; }
+#saveForm input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  border: 2px solid var(--wood-dark);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 16px;
+  background: #fffaf0;
+}
+#savesList { display: flex; flex-direction: column; gap: 8px; }
+.save-item {
+  border: 2px solid var(--cream-2);
+  background: #fffaf0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+.save-item .save-name { font-weight: 800; overflow-wrap: anywhere; }
+.save-item .save-meta { grid-column: 1; font-size: 0.8rem; opacity: 0.75; }
+.save-item .save-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 6px; }
+.save-item .btn { min-height: 36px; padding: 6px 10px; font-size: 0.9rem; }
+.save-item .btn.danger.armed { background: #e07a5f; }
+.saves-empty { text-align: center; opacity: 0.7; padding: 12px 0; font-size: 0.9rem; }

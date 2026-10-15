@@ -54,6 +54,41 @@ export class Cats {
     return this.cats.map((c) => this.wire(c));
   }
 
+  // For save files: where each cat is and whether it's napping.
+  serialize() {
+    return this.cats.map((c) => ({
+      id: c.id,
+      x: Math.round(c.jump ? c.jump.tx : c.x),
+      y: Math.round(c.jump ? c.jump.ty : c.y),
+      flip: c.flip,
+      napping: c.anim === 'sleep' && c.spot ? c.spot.name : null,
+    }));
+  }
+
+  restore(saved) {
+    for (const s of Array.isArray(saved) ? saved : []) {
+      const c = this.cats.find((k) => k.id === s.id);
+      if (!c) continue;
+      const spot = NAP_SPOTS.find((n) => n.name === s.napping);
+      c.path = null;
+      c.jump = null;
+      c.then = null;
+      c.flip = !!s.flip;
+      if (spot) {
+        c.x = spot.x;
+        c.y = spot.y;
+        c.spot = spot;
+        this.setAnim(c, 'sleep', rand(15000, 30000));
+      } else if (isWalkable(s.x, s.y)) {
+        c.x = s.x;
+        c.y = s.y;
+        c.spot = null;
+        this.setAnim(c, 'idle', rand(1500, 4000));
+      }
+      c.dirty = true;
+    }
+  }
+
   wire(c) {
     return [c.id, Math.round(c.x * 10) / 10, Math.round(c.y * 10) / 10, c.flip ? 1 : 0, c.anim, c.n];
   }

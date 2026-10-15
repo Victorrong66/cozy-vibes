@@ -21,6 +21,12 @@ on phones and laptops alike.
   They wander, nap on the bed, cushion, beanbag or hallway rug, play with yarn and come
   hang out by people. Everyone in a house sees the same cats. Tap one to pet it, play
   with it, tease it (it swats and runs off) or call it over.
+- **Coming back:** each house remembers where everyone was, including who was in
+  bed or on the couch, plus the cats. Come back with the same house code on the same
+  phone or laptop and you're right where you left off.
+- **Saves:** tap 💾 to name a save (like "Movie night"), and load it any time to put
+  everyone and the cats back where they were. People who aren't there when it's loaded
+  go back to their spot the next time they come over. Each house keeps up to 10 saves.
 - **Yourself:** tap your own character to sit, nap, dance, emote or change your look.
 - **Chat:** tap 💬 (or press Enter on a keyboard) and type. Messages show up as speech
   bubbles.
@@ -74,6 +80,10 @@ npm run deploy
 | --- | --- |
 | `src/room.js` | The multiplayer server logic for one house: joining, movement, actions, chat. It rejects positions inside walls. |
 | `src/cats.js` | The two house cats: what they decide to do and how they react to people. |
+
+Where houses are stored: on Cloudflare, in each house's Durable Object storage. With
+`npm start`, in `data/<house code>.json` (set `DATA_DIR` to put them elsewhere). In the
+offline preview, in the browser.
 | `worker/index.js` | Cloudflare entry point: one Durable Object per house code, each running a `Room`. |
 | `server.js` | The same `Room` on plain Node, for running locally or on any Node host. |
 | `public/js/map.js` | The floor plan: walkable areas, doors, blockers, collision and pathfinding. The server and browser share it. |

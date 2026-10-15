@@ -50,11 +50,22 @@ let profile = loadProfile();
 function loadProfile() {
   try {
     const p = JSON.parse(localStorage.getItem('cozy-profile') || '{}');
-    return { name: p.name || '', look: Number.isInteger(p.look) ? p.look : Math.floor(Math.random() * 2) };
+    return {
+      name: p.name || '',
+      look: Number.isInteger(p.look) ? p.look : Math.floor(Math.random() * 2),
+      // Lets a house recognise you next time, so you're back where you left off.
+      token: typeof p.token === 'string' && p.token.length >= 8 ? p.token : newToken(),
+    };
   } catch {
-    return { name: '', look: 0 };
+    return { name: '', look: 0, token: newToken() };
   }
 }
+function newToken() {
+  const a = new Uint8Array(12);
+  crypto.getRandomValues(a);
+  return [...a].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function saveProfile() {
   try {
     localStorage.setItem('cozy-profile', JSON.stringify(profile));
@@ -96,7 +107,7 @@ function buildPicker() {
 
 function initJoin() {
   const params = new URLSearchParams(location.search);
-  $('nameInput').value = profile.name;
+  if (!$('nameInput').value) $('nameInput').value = profile.name; // don't clobber typing done while loading
   $('roomInput').value = params.get('room') || randomRoom();
   buildPicker();
   const go = () => {
@@ -131,7 +142,7 @@ function connect(room) {
 
   ws.addEventListener('open', () => {
     reconnectDelay = 500;
-    send({ t: 'join', room, name: profile.name, look: profile.look });
+    send({ t: 'join', room, name: profile.name, look: profile.look, token: profile.token });
   });
   ws.addEventListener('message', (e) => {
     let msg;
@@ -197,7 +208,9 @@ function onMessage(msg) {
       $('roomName').textContent = msg.room;
       updateCount();
       sendState(true);
-      if (!prev)
+      if (!prev) syncSeat(mine);
+      if (!prev && msg.back) toast(`Welcome back, ${profile.name}! You're right where you left off.`);
+      else if (!prev)
         toast(
           TOUCH
             ? `Welcome home, ${profile.name}! Use the joystick to walk, drag to look around.`
@@ -256,6 +269,29 @@ function onMessage(msg) {
       addEffect(msg.id, msg.emoji);
       if (msg.by === state.myId) toast(msg.text);
       break;
+    case 'notice':
+      toast(msg.text);
+      break;
+    case 'saves':
+      renderSaves(msg.list);
+      break;
+    case 'moveto': {
+      // A save was loaded: jump to where we were in it.
+      const mine = state.players.get(state.myId);
+      if (!mine) break;
+      me.path = null;
+      me.pending = null;
+      me.goingToSeat = null;
+      stopFollowing();
+      mine.x = mine.tx = msg.x;
+      mine.y = mine.ty = msg.y;
+      mine.dir = msg.dir;
+      mine.pose = msg.pose;
+      syncSeat(mine);
+      followMe();
+      sendState(true);
+      break;
+    }
     case 'emote':
       addEffect(msg.from, msg.emoji);
       break;
@@ -644,6 +680,15 @@ function sitIn(seat) {
   sendState(true);
 }
 
+// If we've been placed in a seat (coming back, or a save was loaded), sit in it
+// properly so getting up works.
+function syncSeat(mine) {
+  me.seat = null;
+  for (const f of FURNITURE) {
+    for (const s of f.seats) if (Math.abs(s.x - mine.x) < 1 && Math.abs(s.y - mine.y) < 1) me.seat = s;
+  }
+}
+
 // Get up and step back out the way we came in.
 function leaveSeat() {
   if (!me.seat) return;
@@ -674,6 +719,7 @@ addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if (k === 'escape') {
     closeMenu();
+    closeSaves();
     $('emoteTray').classList.add('hidden');
   }
 });
@@ -869,6 +915,82 @@ for (const e of EMOTES) {
   });
   $('emoteTray').append(b);
 }
+
+// ---------------------------------------------------------------------------
+// Save files
+// ---------------------------------------------------------------------------
+
+function openSaves() {
+  closeMenu();
+  releaseJoy();
+  $('savesPanel').classList.remove('hidden');
+  $('savesList').innerHTML = '<div class="saves-empty">Loading saves…</div>';
+  send({ t: 'saves' });
+}
+function closeSaves() {
+  $('savesPanel').classList.add('hidden');
+}
+
+function renderSaves(list) {
+  const box = $('savesList');
+  box.innerHTML = '';
+  if (!list.length) {
+    box.innerHTML = '<div class="saves-empty">No saves yet. Name one above to make your first.</div>';
+    return;
+  }
+  for (const s of [...list].reverse()) {
+    const item = document.createElement('div');
+    item.className = 'save-item';
+    const name = document.createElement('div');
+    name.className = 'save-name';
+    name.textContent = s.name;
+    const meta = document.createElement('div');
+    meta.className = 'save-meta';
+    const when = new Date(s.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    meta.textContent = `${when} · ${s.who.length ? s.who.join(', ') : 'nobody'}`;
+    const actions = document.createElement('div');
+    actions.className = 'save-actions';
+    const load = document.createElement('button');
+    load.className = 'btn primary';
+    load.textContent = 'Load';
+    load.addEventListener('click', () => {
+      send({ t: 'load', id: s.id });
+      closeSaves();
+    });
+    // Delete takes two taps, so a stray tap can't lose a save.
+    const del = document.createElement('button');
+    del.className = 'btn danger';
+    del.textContent = 'Delete';
+    del.addEventListener('click', () => {
+      if (!del.classList.contains('armed')) {
+        del.classList.add('armed');
+        del.textContent = 'Sure?';
+        setTimeout(() => {
+          del.classList.remove('armed');
+          del.textContent = 'Delete';
+        }, 3000);
+        return;
+      }
+      send({ t: 'deleteSave', id: s.id });
+    });
+    actions.append(load, del);
+    item.append(name, actions, meta);
+    box.append(item);
+  }
+}
+
+$('savesBtn').addEventListener('click', openSaves);
+$('savesClose').addEventListener('click', closeSaves);
+$('savesPanel').addEventListener('click', (e) => e.target === $('savesPanel') && closeSaves());
+$('saveForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name =
+    $('saveName').value.trim() ||
+    new Date().toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' });
+  send({ t: 'save', name });
+  $('saveName').value = '';
+  $('saveName').blur();
+});
 
 // ---------------------------------------------------------------------------
 // Toasts / status
