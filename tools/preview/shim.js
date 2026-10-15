@@ -257,5 +257,5 @@ function startBot(name, look, startDelay) {
   }, 100);
 }
 
-startBot('Mochi', 1, 300);
-startBot('Bao', 0, 900);
+// The house starts empty apart from you and the cats; use 🙋 Add to invite
+// housemates. (startBot is kept for testing: startBot('Mochi', 1, 300).)

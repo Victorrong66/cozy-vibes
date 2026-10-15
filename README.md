@@ -20,7 +20,8 @@ on phones and laptops alike.
 - **Cats:** Biscuit (the tabby) and Pepper (the black cat) roam the house on their own.
   They wander, nap on the bed, cushion, beanbag or hallway rug, play with yarn and come
   hang out by people. Everyone in a house sees the same cats. Tap one to pet it, play
-  with it, tease it (it swats and runs off) or call it over.
+  with it, tease it (it swats and runs off), call it over, or rename it. Names are
+  shared with everyone and remembered.
 - **Housemates:** tap **🙋 Add** to invite a computer-controlled housemate: an
   animator (works at the desk), chef (dining table), gamer (couch), sleepy roommate
   (bed), plant lover (waters the plants) or bookworm (bookshelves and couch). Pick
@@ -58,8 +59,8 @@ To try it on your phone while running it on your computer, open
 ### Offline preview
 
 `node tools/build_preview.mjs` builds `dist/preview.html`, a single file you can open
-anywhere with no server. Everything's embedded, and two bot housemates (Mochi and Bao)
-keep you company in place of real players.
+anywhere with no server. Everything's embedded. It starts with just you and the cats; use
+🙋 Add to invite housemates.
 
 ## Hosting on Cloudflare
 

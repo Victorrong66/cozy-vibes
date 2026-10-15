@@ -401,3 +401,14 @@ body.touch.chatting #joystick { display: none; }
   .role .role-about { font-size: 0.72rem; }
 }
 #npcLooks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+#menuButtons .rename { grid-column: span 2; display: flex; gap: 6px; }
+#menuButtons .rename input {
+  flex: 1; min-width: 0; font: inherit; font-size: 16px; font-weight: 700;
+  border: 2px solid var(--wood-dark); border-radius: 10px; padding: 7px 10px; background: #fffaf0;
+}
+
+/* Narrow phones: icon-only buttons so the house name and count fit. */
+@media (max-width: 420px) {
+  #hud .btn-label { display: none; }
+}

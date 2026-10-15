@@ -195,6 +195,7 @@ function onMessage(msg) {
       for (const p of msg.players) state.players.set(p.id, makePlayer(p));
       state.cats.clear();
       for (const c of msg.cats || []) updateCat(c);
+      Object.assign(CAT_NAMES, msg.catNames || {});
       const mine = state.players.get(msg.id);
       if (prev && isWalkable(prev.x, prev.y)) {
         // Reconnected: keep standing where we were.
@@ -267,6 +268,13 @@ function onMessage(msg) {
     case 'cats':
       for (const c of msg.c) updateCat(c);
       break;
+    case 'catname':
+      CAT_NAMES[msg.id] = msg.name;
+      if (menuTarget === msg.id) $('menuName').textContent = msg.name;
+      break;
+    case 'catnames':
+      Object.assign(CAT_NAMES, msg.names);
+      break;
     case 'catfx':
       addEffect(msg.id, msg.emoji);
       if (msg.by === state.myId) toast(msg.text);
@@ -319,6 +327,7 @@ function updateCat([id, x, y, flip, anim, n]) {
   }
 }
 
+// Cats' names come from the house (they can be renamed).
 const CAT_NAMES = { tabby: 'Biscuit', black: 'Pepper' };
 
 function updateCount() {
@@ -611,7 +620,43 @@ function openCatMenu(c, screenX, screenY) {
     });
     box.append(b);
   }
+  const rename = document.createElement('button');
+  rename.className = 'btn wide';
+  rename.textContent = '✏️ Rename';
+  rename.addEventListener('click', () => showCatRename(c.id));
+  box.append(rename);
   placeMenu(screenX, screenY);
+}
+
+// Swap the cat's buttons for a name box.
+function showCatRename(id) {
+  const box = $('menuButtons');
+  box.innerHTML = '';
+  const form = document.createElement('form');
+  form.className = 'rename wide';
+  form.autocomplete = 'off';
+  const input = document.createElement('input');
+  input.id = 'catNameInput';
+  input.maxLength = 16;
+  input.value = CAT_NAMES[id] || '';
+  input.setAttribute('aria-label', 'Cat name');
+  input.enterKeyHint = 'done';
+  const save = document.createElement('button');
+  save.className = 'btn primary';
+  save.type = 'submit';
+  save.textContent = 'Save';
+  form.append(input, save);
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (name && name !== CAT_NAMES[id]) send({ t: 'renameCat', id, name });
+    input.blur();
+    closeMenu();
+  });
+  box.append(form);
+  releaseJoy();
+  input.focus();
+  input.select();
 }
 
 function doCatAction(id, action) {

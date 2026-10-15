@@ -54,6 +54,18 @@ export class Cats {
     return this.cats.map((c) => this.wire(c));
   }
 
+  names() {
+    return Object.fromEntries(this.cats.map((c) => [c.id, c.name]));
+  }
+
+  rename(id, name) {
+    const c = this.cats.find((k) => k.id === id);
+    if (!c || !name) return null;
+    const old = c.name;
+    c.name = name;
+    return old;
+  }
+
   // For save files: where each cat is and whether it's napping.
   serialize() {
     return this.cats.map((c) => ({
@@ -61,6 +73,7 @@ export class Cats {
       x: Math.round(c.jump ? c.jump.tx : c.x),
       y: Math.round(c.jump ? c.jump.ty : c.y),
       flip: c.flip,
+      name: c.name,
       napping: c.anim === 'sleep' && c.spot ? c.spot.name : null,
     }));
   }
@@ -69,6 +82,7 @@ export class Cats {
     for (const s of Array.isArray(saved) ? saved : []) {
       const c = this.cats.find((k) => k.id === s.id);
       if (!c) continue;
+      if (typeof s.name === 'string' && s.name.trim()) c.name = s.name.trim().slice(0, 16);
       const spot = NAP_SPOTS.find((n) => n.name === s.napping);
       c.path = null;
       c.jump = null;

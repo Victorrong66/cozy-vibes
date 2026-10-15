@@ -55,7 +55,7 @@ try {
   let body = html.match(/<body>([\s\S]*?)<\/body>/)[1].replace(/<script[^>]*src="js\/game\.js"[^>]*><\/script>/, '');
   // In the preview everyone's in the same pretend house, so drop the house code field.
   body = body
-    .replace(/<label>House code[\s\S]*?<\/label>\s*<p class="hint">[\s\S]*?<\/p>/, '<p class="hint">Preview mode: you share the house with two bots, Mochi and Bao. Once it\'s hosted, real friends can join with a house code.</p>');
+    .replace(/<label>House code[\s\S]*?<\/label>\s*<p class="hint">[\s\S]*?<\/p>/, '<p class="hint">Preview mode: it\'s just you and the cats for now. Tap 🙋 Add to invite housemates. Once it\'s hosted, friends can join with a house code.</p>');
 
   const page = `${head.trim()}
   <meta name="claude:viewport-fit-sides" content="cover" />

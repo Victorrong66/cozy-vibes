@@ -200,6 +200,7 @@ export class Room {
       back: !!back,
       players: [...this.players.values(), ...this.npcs.list.values()].map(publicPlayer),
       cats: this.cats.snapshot(),
+      catNames: this.cats.names(),
     });
     this.broadcast({ t: 'join', player: publicPlayer(player) }, player.id);
     if (!this.timer) this.timer = setInterval(() => this.tick(), TICK_MS);
@@ -259,6 +260,18 @@ export class Room {
         player.lastChat = now;
         this.broadcast({ t: 'chat', from: player.id, text });
         this.npcs.hearChat(player);
+        break;
+      }
+      case 'renameCat': {
+        const now = Date.now();
+        if (now - (player.lastCat || 0) < 400) return;
+        player.lastCat = now;
+        const name = clean(msg.name, 16);
+        const old = this.cats.rename(String(msg.id), name);
+        if (!old || old === name) return;
+        this.broadcast({ t: 'catname', id: String(msg.id), name });
+        this.broadcast({ t: 'notice', text: `🐾 ${player.name} renamed ${old} to ${name}` });
+        this.persist(true);
         break;
       }
       case 'cat': {
@@ -359,6 +372,7 @@ export class Room {
       }
     }
     this.cats.restore(save.cats);
+    this.broadcast({ t: 'catnames', names: this.cats.names() });
     if (save.npcs) {
       const [removed, added] = this.npcs.restore(save.npcs);
       for (const n of removed) this.broadcast({ t: 'leave', id: n.id, quiet: true });

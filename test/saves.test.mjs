@@ -111,5 +111,15 @@ cat.y = 400;
 room.loadSnapshot({ name: 'Ann', id: 1 }, stored.saves.at(-1).id);
 assert.deepEqual([room.cats.cats[0].x, room.cats.cats[0].y], [900, 600], 'cat restored');
 
+// --- Renaming a cat is shared and remembered ---
+const r = fakeSocket();
+room.attach(r);
+await r.receive({ t: 'join', name: 'Rae', look: 0, token: 'token-rae-789' });
+await r.receive({ t: 'renameCat', id: 'tabby', name: 'Mr. Whiskers' });
+assert.deepEqual(r.sent.find((m) => m.t === 'catname'), { t: 'catname', id: 'tabby', name: 'Mr. Whiskers' });
+const again = new Room('t', () => {}, store);
+await again.ready;
+assert.equal(again.cats.names().tabby, 'Mr. Whiskers', 'cat name survives a restart');
+
 console.log('save tests passed');
 process.exit(0);
