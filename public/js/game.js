@@ -334,6 +334,31 @@ function updateCount() {
   $('playerCount').textContent = [...state.players.values()].filter((p) => !p.npc).length;
   const npcs = [...state.players.values()].filter((p) => p.npc).length;
   $('npcCount').textContent = npcs ? `${npcs} of 6 added so far.` : '';
+  renderHousemateList();
+}
+
+// The Add panel's list of computer housemates, each with a Remove button.
+function renderHousemateList() {
+  const box = $('npcList');
+  if (!box) return;
+  const npcs = [...state.players.values()].filter((p) => p.npc);
+  $('npcListWrap').hidden = !npcs.length;
+  box.innerHTML = '';
+  for (const p of npcs) {
+    const row = document.createElement('div');
+    row.className = 'npc-row';
+    const label = document.createElement('span');
+    label.textContent = `${ROLE_INFO[p.npc]?.emoji || ''} ${p.name} · ${ROLE_INFO[p.npc]?.title || ''}`;
+    const rm = document.createElement('button');
+    rm.className = 'btn danger';
+    rm.textContent = 'Remove';
+    rm.addEventListener('click', () => {
+      rm.disabled = true;
+      send({ t: 'removeNpc', id: p.id });
+    });
+    row.append(label, rm);
+    box.append(row);
+  }
 }
 
 let lastSent = '';
@@ -567,7 +592,8 @@ function openMenu(id, screenX, screenY) {
     if (me.follow === id) add('🛑 Stop following', () => doAction(id, 'unfollow'), 'wide');
     else add('👣 Follow', () => doAction(id, 'follow'), 'wide');
     add('🚶 Walk over', () => walkTo(p.x, p.y + 20), 'wide');
-    if (p.npc) add('🏠 Send home', () => send({ t: 'removeNpc', id: p.id }), 'wide');
+    // Only computer housemates can be removed; real people can't.
+    if (p.npc) add('🗑️ Remove from house', () => send({ t: 'removeNpc', id: p.id }), 'wide danger');
   }
 
   placeMenu(screenX, screenY);

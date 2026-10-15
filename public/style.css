@@ -412,3 +412,14 @@ body.touch.chatting #joystick { display: none; }
 @media (max-width: 420px) {
   #hud .btn-label { display: none; }
 }
+
+/* Housemates already in the house, in the Add panel */
+#npcList { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.npc-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border: 2px solid var(--cream-2); background: #fffaf0; border-radius: 10px; padding: 6px 6px 6px 10px;
+  font-weight: 700;
+}
+.npc-row span { min-width: 0; overflow-wrap: anywhere; }
+.btn.danger { background: #f3b2a6; }
+.npc-row .btn { min-height: 34px; padding: 4px 10px; font-size: 0.9rem; }

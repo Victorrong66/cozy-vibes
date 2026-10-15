@@ -106,5 +106,15 @@ await wait(1100);
 await b.receive({ t: 'load', id: stored.saves[0].id });
 assert.equal([...room.npcs.list.values()][0]?.name, 'Ava', 'loading the save brings Ava back');
 assert.ok(b.sent.some((m) => m.t === 'saves' && m.list[0].who.some((w) => w.includes('Ava'))), 'save list shows Ava');
+// Real players can never be removed, only computer housemates.
+const c = fakeSocket();
+room.attach(c);
+await c.receive({ t: 'join', name: 'Cam', look: 1, token: 'token-cam-321' });
+const camId = c.sent.find((m) => m.t === 'welcome').id;
+await wait(300);
+await b.receive({ t: 'removeNpc', id: camId });
+assert.ok(room.players.has(camId), 'a real player is not removed');
+assert.ok(!b.sent.some((m) => m.t === 'leave' && m.id === camId), 'nobody is told Cam left');
+
 console.log('housemate tests passed');
 process.exit(0);
