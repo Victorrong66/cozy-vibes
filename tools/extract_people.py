@@ -1,15 +1,17 @@
-"""Cut the girl's frames out of art/girl-sheet.png.
+"""Cut character frames out of sheets laid out like art/girl-sheet.png:
+8-frame walks for down, up, left and right, plus 4-frame play, attack, jump
+and sleep animations. The white background and shadows are removed and every
+frame is lined up on the feet.
 
-The sheet has 8-frame walks for down, up, left and "right", plus 4-frame play,
-attack, jump and sleep animations. Its "right" row is drawn facing left like
-the left row, so the right-facing walk is the left walk mirrored. The white
-background and shadows are removed and every frame is lined up on her feet.
+On the girl's sheet the "right" row is drawn facing left like the left row, so
+her right walk is the left walk mirrored. The girl with glasses has a proper
+right row.
 
-Output: public/assets/characters/girl.png and girl.json, in the same layout the
-game already uses (rows of equal-sized cells), with the extra animations as
+Output per character: public/assets/characters/<id>.png and <id>.json, in the
+layout the game uses (rows of equal-sized cells), with the extra animations as
 additional rows.
 
-Run from the repo root:  python3 tools/extract_girl.py
+Run from the repo root:  python3 tools/extract_people.py
 """
 
 import json
@@ -23,18 +25,39 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from extract_cats import background_like, blobs, flood_from_edges  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SHEET = os.path.join(ROOT, 'art', 'girl-sheet.png')
 OUT = os.path.join(ROOT, 'public', 'assets', 'characters')
 
-# name: (x0, y0, x1, y1, frames) - the area of each animation, above its frame numbers
-ROWS = {
-    'down': (20, 92, 762, 245, 8),
-    'up': (775, 92, 1515, 246, 8),
-    'left': (25, 355, 762, 512, 8),
-    'play': (30, 622, 755, 763, 4),
-    'attack': (790, 622, 1515, 763, 4),
-    'jump': (30, 825, 755, 986, 4),
-    'sleep': (790, 845, 1515, 986, 4),
+# For each sheet, the area of each animation, above its frame numbers:
+#   name: (x0, y0, x1, y1, frames). 'right': None means mirror the left walk.
+PEOPLE = {
+    'girl': {
+        'name': 'Girl',
+        'sheet': 'girl-sheet.png',
+        'rows': {
+            'down': (20, 92, 762, 245, 8),
+            'up': (775, 92, 1515, 246, 8),
+            'left': (25, 355, 762, 512, 8),
+            'right': None,
+            'play': (30, 622, 755, 763, 4),
+            'attack': (790, 622, 1515, 763, 4),
+            'jump': (30, 825, 755, 986, 4),
+            'sleep': (790, 845, 1515, 986, 4),
+        },
+    },
+    'glasses': {
+        'name': 'Glasses',
+        'sheet': 'glasses-sheet.png',
+        'rows': {
+            'down': (18, 90, 755, 244, 8),
+            'up': (785, 90, 1515, 244, 8),
+            'left': (22, 352, 760, 512, 8),
+            'right': (778, 352, 1515, 512, 8),
+            'play': (30, 620, 760, 763, 4),
+            'attack': (790, 620, 1515, 763, 4),
+            'jump': (30, 818, 760, 986, 4),
+            'sleep': (790, 840, 1515, 986, 4),
+        },
+    },
 }
 WALKS = ['down', 'up', 'left', 'right']
 EXTRAS = ['play', 'attack', 'jump', 'sleep']
@@ -70,8 +93,8 @@ def split_frames(alpha, n):
     return spans
 
 
-def cut_row(sheet, name):
-    x0, y0, x1, y1, n = ROWS[name]
+def cut_row(sheet, box):
+    x0, y0, x1, y1, n = box
     region = sheet[y0:y1, x0:x1]
     alpha = ~flood_from_edges(background_like(region))
     keep = np.zeros_like(alpha)
@@ -113,10 +136,11 @@ def mirror(frames):
     return out
 
 
-def main():
-    sheet = np.array(Image.open(SHEET).convert('RGB'))
-    rows = {name: cut_row(sheet, name) for name in ROWS}
-    rows['right'] = mirror(rows['left'])
+def build(pid, cfg):
+    sheet = np.array(Image.open(os.path.join(ROOT, 'art', cfg['sheet'])).convert('RGB'))
+    rows = {name: cut_row(sheet, box) for name, box in cfg['rows'].items() if box}
+    if cfg['rows']['right'] is None:
+        rows['right'] = mirror(rows['left'])
     order = WALKS + EXTRAS
 
     all_frames = [f for name in order for f in rows[name]]
@@ -134,12 +158,12 @@ def main():
             oy = int(r * cell_h + foot_y - f['floor'])
             out.alpha_composite(img, (max(0, ox), max(0, oy)), (max(0, -ox), max(0, -oy)))
     os.makedirs(OUT, exist_ok=True)
-    out.save(os.path.join(OUT, 'girl.png'), optimize=True)
+    out.save(os.path.join(OUT, f'{pid}.png'), optimize=True)
 
     meta = {
-        'id': 'girl',
-        'name': 'Girl',
-        'image': 'assets/characters/girl.png',
+        'id': pid,
+        'name': cfg['name'],
+        'image': f'assets/characters/{pid}.png',
         'cellW': cell_w,
         'cellH': cell_h,
         'footX': foot_x,
@@ -150,9 +174,16 @@ def main():
         'walkFrames': 8,  # every walk frame is part of the cycle
         'extraFrames': 4,
     }
-    with open(os.path.join(OUT, 'girl.json'), 'w') as fh:
+    with open(os.path.join(OUT, f'{pid}.json'), 'w') as fh:
         json.dump(meta, fh, indent=2)
-    print(f'girl: cell {cell_w}x{cell_h}, standing height {walk_h}, rows {order}')
+    print(f'{pid}: cell {cell_w}x{cell_h}, standing height {walk_h}')
+
+
+def main():
+    only = sys.argv[1:]
+    for pid, cfg in PEOPLE.items():
+        if not only or pid in only:
+            build(pid, cfg)
 
 
 if __name__ == '__main__':

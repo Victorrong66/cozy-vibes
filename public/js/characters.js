@@ -1,10 +1,10 @@
 // Character sprites. The boy comes from art/characters-sheet.png
-// (tools/extract_sprites.py) and the girl from art/girl-sheet.png
-// (tools/extract_girl.py). Each sheet has one row per walking direction (down,
+// (tools/extract_sprites.py); the girl and the girl with glasses from
+// art/girl-sheet.png and art/glasses-sheet.png (tools/extract_people.py). Each sheet has one row per walking direction (down,
 // up, left, right); frame 0 is the standing pose. A sheet may also have extra
 // rows - play, attack, jump, sleep - which are used when present.
 
-const IDS = ['boy', 'girl'];
+const IDS = ['boy', 'girl', 'glasses'];
 
 // How tall a character is drawn in the house, in house-image pixels.
 export const CHAR_H = 76;

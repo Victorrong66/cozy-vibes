@@ -53,7 +53,7 @@ function loadProfile() {
     const p = JSON.parse(localStorage.getItem('cozy-profile') || '{}');
     return {
       name: p.name || '',
-      look: Number.isInteger(p.look) ? p.look : Math.floor(Math.random() * 2),
+      look: Number.isInteger(p.look) ? p.look : Math.floor(Math.random() * 3),
       // Lets a house recognise you next time, so you're back where you left off.
       token: typeof p.token === 'string' && p.token.length >= 8 ? p.token : newToken(),
     };

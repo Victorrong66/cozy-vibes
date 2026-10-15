@@ -30,7 +30,7 @@ DIRS = ['down', 'up', 'left', 'right']
 ROWS = [(85, 250), (305, 475), (530, 702), (760, 932)]
 CHARACTERS = [
     {'id': 'boy', 'name': 'Boy', 'x': (100, 770), 'frames': 7},
-    # The girl now comes from art/girl-sheet.png (tools/extract_girl.py).
+    # The girl now comes from art/girl-sheet.png (tools/extract_people.py).
 ]
 
 

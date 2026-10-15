@@ -237,7 +237,7 @@ button { font: inherit; color: inherit; }
 }
 .card .hint { font-size: 0.8rem; opacity: 0.7; margin: 6px 0 16px; }
 
-#picker, .looks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+#picker, .looks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .look {
   border: 2px solid var(--cream-2);
   background: #fffaf0;
@@ -400,4 +400,4 @@ body.touch.chatting #joystick { display: none; }
   .role { padding: 8px; }
   .role .role-about { font-size: 0.72rem; }
 }
-#npcLooks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+#npcLooks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }

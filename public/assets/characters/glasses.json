@@ -1,0 +1,23 @@
+{
+  "id": "glasses",
+  "name": "Glasses",
+  "image": "assets/characters/glasses.png",
+  "cellW": 178,
+  "cellH": 158,
+  "footX": 89,
+  "footY": 155,
+  "walkH": 137,
+  "rows": [
+    "down",
+    "up",
+    "left",
+    "right",
+    "play",
+    "attack",
+    "jump",
+    "sleep"
+  ],
+  "frames": 8,
+  "walkFrames": 8,
+  "extraFrames": 4
+}

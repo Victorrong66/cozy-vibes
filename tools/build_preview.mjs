@@ -17,7 +17,7 @@ const dataUri = (file, type) => `data:${type};base64,${fs.readFileSync(file).toS
 
 // Generated module with the embedded images.
 const meta = {};
-for (const id of ['boy', 'girl']) {
+for (const id of ['boy', 'girl', 'glasses']) {
   const m = JSON.parse(fs.readFileSync(path.join(PUB, 'assets/characters', `${id}.json`), 'utf8'));
   m.image = dataUri(path.join(PUB, 'assets/characters', `${id}.png`), 'image/png');
   meta[`characters/${id}`] = m;
