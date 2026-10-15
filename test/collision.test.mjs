@@ -14,15 +14,17 @@ assert.ok(isWalkable(office.x, office.y), 'office floor');
 // Walls
 assert.ok(!isWalkable(825, 300), 'wall between living room and bedroom');
 assert.ok(!isWalkable(1000, 680), 'wall between hallway and office (below door)');
-assert.ok(!isWalkable(1000, 500), 'wall between hallway and office (above door)');
-assert.ok(!isWalkable(1100, 378), 'wall between bedroom and office');
+assert.ok(!isWalkable(1000, 470), 'wall between hallway and office (above door)');
+assert.ok(!isWalkable(1100, 370), 'wall between bedroom and office');
 assert.ok(!isWalkable(500, 780), 'outer wall / front of house');
 assert.ok(!isWalkable(905, 780), 'front door is closed');
 assert.ok(!isWalkable(200, 500), 'left outer wall');
 
 // Doors
-assert.ok(isWalkable(902, 420), 'bedroom doorway');
-assert.ok(isWalkable(995, 580), 'office doorway');
+assert.ok(isWalkable(904, 410), 'bedroom doorway');
+assert.ok(isWalkable(995, 550), 'office doorway');
+assert.ok(!isWalkable(500, 728), 'bottom wall of the living room');
+assert.ok(!isWalkable(835, 700), 'pillar by the front door');
 
 // Walking straight into a wall stops you
 const hit = moveWithCollision(780, 300, 200, 0);

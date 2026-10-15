@@ -7,24 +7,24 @@ export const MAP_W = 1536;
 export const MAP_H = 1024;
 
 export const AREAS = [
-  { name: 'living room', x1: 240, y1: 225, x2: 805, y2: 738 },
-  { name: 'hallway', x1: 800, y1: 472, x2: 980, y2: 738 },
-  { name: 'bedroom door', x1: 872, y1: 360, x2: 932, y2: 480, door: true },
-  { name: 'bedroom', x1: 850, y1: 172, x2: 1336, y2: 368 },
-  { name: 'office door', x1: 972, y1: 546, x2: 1022, y2: 616, door: true },
-  { name: 'office', x1: 1016, y1: 472, x2: 1346, y2: 740 },
+  { name: 'living room', x1: 240, y1: 225, x2: 805, y2: 715 },
+  { name: 'hallway', x1: 800, y1: 458, x2: 982, y2: 715 },
+  { name: 'bedroom door', x1: 866, y1: 345, x2: 942, y2: 465, door: true },
+  { name: 'bedroom', x1: 842, y1: 162, x2: 1340, y2: 350 },
+  { name: 'office door', x1: 975, y1: 508, x2: 1018, y2: 596, door: true },
+  { name: 'office', x1: 1012, y1: 476, x2: 1350, y2: 712 },
 ];
 
 // Solid bits that poke into a floor area.
 export const BLOCKERS = [
-  { name: 'pillar by the front door', x1: 822, y1: 690, x2: 852, y2: 760 },
+  { name: 'pillar by the front door', x1: 818, y1: 680, x2: 852, y2: 760 },
 ];
 
 // Half-width and height of the foot box used for collision.
 export const FOOT_HALF_W = 9;
 export const FOOT_H = 6;
 
-export const SPAWN = { x: 890, y: 690 };
+export const SPAWN = { x: 900, y: 680 };
 
 function pointInAreas(x, y) {
   for (const b of BLOCKERS) {
