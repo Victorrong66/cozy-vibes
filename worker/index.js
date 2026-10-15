@@ -27,7 +27,12 @@ export class House extends DurableObject {
   async fetch(request) {
     if (!this.room) {
       const code = cleanRoom(new URL(request.url).searchParams.get('room'));
-      this.room = new Room(code);
+      // The house's memory and save files live in this Durable Object's storage.
+      const storage = this.ctx.storage;
+      this.room = new Room(code, () => {}, {
+        load: () => storage.get('house'),
+        save: (data) => storage.put('house', data),
+      });
     }
     const { 0: client, 1: server } = new WebSocketPair();
     server.accept();

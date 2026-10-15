@@ -1,0 +1,19 @@
+{
+  "id": "tabby",
+  "name": "Biscuit",
+  "image": "assets/cats/tabby.png",
+  "cellW": 192,
+  "cellH": 132,
+  "footX": 96,
+  "footY": 129,
+  "walkH": 112,
+  "rows": [
+    "walk",
+    "play",
+    "attack",
+    "jump",
+    "sleep"
+  ],
+  "frames": 4,
+  "facing": "right"
+}

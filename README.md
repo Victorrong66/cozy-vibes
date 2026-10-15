@@ -5,14 +5,39 @@ on phones and laptops alike.
 
 ## Playing
 
-- **Move:** tap or click anywhere on the floor and your character walks there, finding
-  its own way through the doors. On a keyboard you can also use WASD or the arrow keys.
+- **Move:** on a phone or tablet, use the joystick at the bottom of the screen (push it
+  further to walk faster). On a laptop, click the floor and your character walks there,
+  finding its own way through the doors, or use WASD / the arrow keys.
+- **Look around:** drag the map with your finger (or the mouse). Walking again, or
+  tapping **📍 Me**, brings the camera back to you.
 - **Interact:** tap any character to open their action menu: wave, high five, hug,
   send love, poke, dance together, follow, or walk over. Hugs, high fives, pokes and
   dances walk you over to the other person first.
+- **Furniture:** tap the bed, couch or desk to use it. You get into bed from either side
+  where the green blanket meets the white sheet, onto the couch only from the coffee
+  table side, and into the desk chair from the front. Move again to get up. The bed,
+  couch, desk, TV, coffee table and dining table are solid otherwise.
+- **Cats:** Biscuit (the tabby) and Pepper (the black cat) roam the house on their own.
+  They wander, nap on the bed, cushion, beanbag or hallway rug, play with yarn and come
+  hang out by people. Everyone in a house sees the same cats. Tap one to pet it, play
+  with it, tease it (it swats and runs off), call it over, or rename it. Names are
+  shared with everyone and remembered.
+- **Housemates:** tap **🙋 Add** to invite a computer-controlled housemate: an
+  animator (works at the desk), chef (dining table), gamer (couch), sleepy roommate
+  (bed), plant lover (waters the plants) or bookworm (bookshelves and couch). Pick
+  how they look and, if you like, their name. They do their own thing, react when you
+  wave, hug or poke them, and sometimes join in when you chat. Tap one and choose
+  **Send home** to remove them. Up to 6 per house. Everyone sees the same ones, and
+  they're remembered with the house and in saves.
+- **Coming back:** each house remembers where everyone was, including who was in
+  bed or on the couch, plus the cats. Come back with the same house code on the same
+  phone or laptop and you're right where you left off.
+- **Saves:** tap 💾 to name a save (like "Movie night"), and load it any time to put
+  everyone and the cats back where they were. People who aren't there when it's loaded
+  go back to their spot the next time they come over. Each house keeps up to 10 saves.
 - **Yourself:** tap your own character to sit, nap, dance, emote or change your look.
-- **Chat:** type in the box at the bottom (or press Enter on a keyboard). Messages
-  show up as speech bubbles.
+- **Chat:** tap 💬 (or press Enter on a keyboard) and type. Messages show up as speech
+  bubbles.
 - **Friends:** everyone who uses the same *house code* ends up in the same house.
   Press **Invite** to share the link.
 
@@ -30,6 +55,12 @@ npm run check      # syntax check + wall/door collision tests
 
 To try it on your phone while running it on your computer, open
 `http://<your-computer's-local-IP>:3000` with the phone on the same Wi-Fi.
+
+### Offline preview
+
+`node tools/build_preview.mjs` builds `dist/preview.html`, a single file you can open
+anywhere with no server. Everything's embedded. It starts with just you and the cats; use
+🙋 Add to invite housemates.
 
 ## Hosting on Cloudflare
 
@@ -56,6 +87,12 @@ npm run deploy
 | File | What it does |
 | --- | --- |
 | `src/room.js` | The multiplayer server logic for one house: joining, movement, actions, chat. It rejects positions inside walls. |
+| `src/cats.js` | The two house cats: what they decide to do and how they react to people. |
+| `src/npcs.js` | Housemates: each role's routine, lines and reactions. Role names and descriptions are in `public/js/roles.js`. |
+
+Where houses are stored: on Cloudflare, in each house's Durable Object storage. With
+`npm start`, in `data/<house code>.json` (set `DATA_DIR` to put them elsewhere). In the
+offline preview, in the browser.
 | `worker/index.js` | Cloudflare entry point: one Durable Object per house code, each running a `Room`. |
 | `server.js` | The same `Room` on plain Node, for running locally or on any Node host. |
 | `public/js/map.js` | The floor plan: walkable areas, doors, blockers, collision and pathfinding. The server and browser share it. |
@@ -66,21 +103,43 @@ npm run deploy
 ### Changing walls and doors
 
 Coordinates are in pixels of `house.png` (1536×1024). Edit `AREAS` in `map.js` to change
-where people can stand, or add to `BLOCKERS` for solid furniture. Then run
+where people can stand, add to `BLOCKERS` for solid furniture, or add to `FURNITURE` for things you can sit or lie on (each seat has an entry point that decides which side you get on from). Then run
 `npm run check`.
+
+### Boundary editor
+
+`tools/boundary-editor/index.html` is a small page that shows the map with every no-walk
+box. Tap a box to pick it, drag it to move it, drag its corners to resize it, add or delete
+boxes, then Save (or Copy as text). Green dots mark the ways onto the bed, couch and desk
+and turn red if a box covers one. The saved boxes go into `BLOCKERS` in
+`public/js/map.js`.
+
+### Marking no-walk areas on a picture
+
+Paint red over a copy of `public/assets/house.png` wherever characters shouldn't stand, save
+it as `art/no-walk-marks.jpg`, and run `python3 tools/marks_to_blockers.py`. It prints a
+rectangle for each marked area to paste into `BLOCKERS` in `public/js/map.js`, and writes
+`art/no-walk-check.png` so you can see them over the map.
 
 ### Characters
 
-The boy and girl come from `art/characters-sheet.png`.
-`tools/extract_sprites.py` cuts the frames out, removes the gray background and
-shadow, and lines every frame up on the character's feet. It writes
-`public/assets/characters/<id>.png` (one row per direction, one column per frame) plus
-a `.json` file with the frame size. If you edit the sheet, re-run it:
+The boy comes from `art/characters-sheet.png` (`tools/extract_sprites.py`). The girl and the
+girl with glasses come from `art/girl-sheet.png` and `art/glasses-sheet.png`
+(`tools/extract_people.py`). Their sheets also have play, attack, jump and sleep
+animations: they play with yarn when sitting on the floor, curl up to nap, jump when
+dancing or high-fiving, and swing when poking. The scripts remove the
+background and line every frame up on the feet, writing `public/assets/characters/<id>.png`
+plus a `.json` with the frame layout. If you edit a sheet, re-run its script:
 
 ```bash
 pip install pillow numpy
-python3 tools/extract_sprites.py
+python3 tools/extract_sprites.py   # boy
+python3 tools/extract_people.py     # girl and girl with glasses
 ```
+
+The cats come from `art/cats-sheet.png` the same way: `python3 tools/extract_cats.py`
+writes `public/assets/cats/`. Their behaviour lives in `src/cats.js` and runs on the
+server, so everyone sees the same cats.
 
 To add another character, add its frames to the sheet (or a new one), add an entry to
 `CHARACTERS` in the script, and add its id to `IDS` in `public/js/characters.js`.

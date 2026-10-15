@@ -15,14 +15,18 @@
   <!-- Top bar -->
   <div id="hud" class="hidden">
     <div class="pill" id="roomPill">🏡 <span id="roomName"></span> · <span id="playerCount">1</span> here</div>
-    <button class="pill btn" id="inviteBtn">🔗 Invite</button>
+    <button class="pill btn" id="inviteBtn" aria-label="Invite">🔗<span class="btn-label"> Invite</span></button>
+    <button class="pill btn round" id="savesBtn" aria-label="Saves">💾</button>
+    <button class="pill btn" id="addBtn" aria-label="Add a housemate">🙋<span class="btn-label"> Add</span></button>
     <div class="spacer"></div>
+    <button class="pill btn hidden" id="recenterBtn" aria-label="Back to my character">📍 Me</button>
     <button class="pill btn round" id="zoomOut" aria-label="Zoom out">−</button>
     <button class="pill btn round" id="zoomIn" aria-label="Zoom in">+</button>
   </div>
 
   <!-- Bottom bar -->
   <div id="bottomBar" class="hidden">
+    <button class="btn" id="chatBtn" aria-label="Chat">💬</button>
     <form id="chatForm" autocomplete="off">
       <input id="chatInput" maxlength="120" placeholder="Say something…" enterkeyhint="send" />
       <button class="btn primary" type="submit">Say</button>
@@ -30,6 +34,11 @@
     <button class="btn" id="emoteBtn" aria-label="Emotes">😀</button>
   </div>
   <div id="emoteTray" class="tray hidden"></div>
+
+  <!-- Joystick (phones and tablets) -->
+  <div id="joystick" class="hidden" aria-label="Move">
+    <div id="joyKnob"></div>
+  </div>
 
   <!-- Character action menu -->
   <div id="actionMenu" class="hidden" role="menu">
@@ -42,6 +51,40 @@
       <button class="close" id="menuClose" aria-label="Close">✕</button>
     </div>
     <div id="menuButtons"></div>
+  </div>
+
+  <!-- Save files -->
+  <div id="savesPanel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="savesTitle">
+    <div class="card saves-card">
+      <div class="saves-head">
+        <h2 id="savesTitle">Saves</h2>
+        <button class="close" id="savesClose" aria-label="Close">✕</button>
+      </div>
+      <p class="sub">Save where everyone and the cats are, then come back to it any time. Loading puts everyone back in their spot.</p>
+      <form id="saveForm" autocomplete="off">
+        <input id="saveName" maxlength="40" placeholder="Name this save, e.g. Movie night" />
+        <button class="btn primary" type="submit">Save</button>
+      </form>
+      <div id="savesList"></div>
+    </div>
+  </div>
+
+  <!-- Add a housemate -->
+  <div id="addPanel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+    <div class="card saves-card">
+      <div class="saves-head">
+        <h2 id="addTitle">Add a housemate</h2>
+        <button class="close" id="addClose" aria-label="Close">✕</button>
+      </div>
+      <p class="sub">Housemates live in the house with you and do their own thing. Everyone in the house sees them. <span id="npcCount"></span></p>
+      <div id="roleList"></div>
+      <div class="label">Looks like</div>
+      <div id="npcLooks" class="looks"></div>
+      <label class="npc-name">Name <span class="optional">(optional)</span>
+        <input id="npcName" maxlength="16" placeholder="We'll pick one" autocomplete="off" />
+      </label>
+      <button class="btn primary big" id="addNpcBtn">Add to the house</button>
+    </div>
   </div>
 
   <div id="toasts"></div>

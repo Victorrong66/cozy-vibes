@@ -8,7 +8,7 @@
     "start": "node server.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check server.js && node test/collision.test.mjs"
+    "check": "node --check server.js && node test/collision.test.mjs && node test/cats.test.mjs && node test/saves.test.mjs && node test/npcs.test.mjs"
   },
   "engines": {
     "node": ">=18"

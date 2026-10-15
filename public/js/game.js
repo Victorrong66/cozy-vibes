@@ -1,5 +1,7 @@
-import { MAP_W, MAP_H, isWalkable, moveWithCollision, findPath, roomAt } from './map.js';
+import { MAP_W, MAP_H, FURNITURE, seatAt, isWalkable, moveWithCollision, findPath, roomAt, furnitureAt } from './map.js';
 import { LOOKS, CHAR_H, loadCharacters, charWidth, drawCharacter, drawPortrait } from './characters.js';
+import { CAT_H, loadCats, drawCat, drawCatPortrait } from './cats.js';
+import { ROLE_INFO } from './roles.js';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -13,8 +15,12 @@ const SPEED = 130; // world px per second
 const NEAR = 44; // how close you need to be to hug / high five
 const EMOTES = ['😀', '😂', '😍', '😮', '😢', '😡', '👍', '💤', '🎉', '❤️'];
 
+// Phones and tablets get a joystick; tapping the floor no longer walks there.
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+if (TOUCH) document.body.classList.add('touch');
+
 const houseImg = new Image();
-houseImg.src = 'assets/house.png';
+houseImg.src = window.COZY_HOUSE_SRC || 'assets/house.png'; // the offline preview embeds it
 
 const state = {
   myId: null,
@@ -23,6 +29,8 @@ const state = {
   effects: [], // floating emojis
   ripples: [], // tap markers
   zoomMul: 1,
+  camFree: false, // true after dragging the map; walking snaps back to following
+  cats: new Map(), // id -> cat (run by the server)
 };
 
 // The local player's movement intent.
@@ -32,6 +40,8 @@ const me = {
   pending: null, // { target, action } to do once we reach them
   repathAt: 0,
   danceUntil: 0,
+  seat: null, // the bed / couch / desk seat we're in
+  goingToSeat: null, // the seat we're walking over to
 };
 
 let ws = null;
@@ -41,11 +51,22 @@ let profile = loadProfile();
 function loadProfile() {
   try {
     const p = JSON.parse(localStorage.getItem('cozy-profile') || '{}');
-    return { name: p.name || '', look: Number.isInteger(p.look) ? p.look : Math.floor(Math.random() * 2) };
+    return {
+      name: p.name || '',
+      look: Number.isInteger(p.look) ? p.look : Math.floor(Math.random() * 3),
+      // Lets a house recognise you next time, so you're back where you left off.
+      token: typeof p.token === 'string' && p.token.length >= 8 ? p.token : newToken(),
+    };
   } catch {
-    return { name: '', look: 0 };
+    return { name: '', look: 0, token: newToken() };
   }
 }
+function newToken() {
+  const a = new Uint8Array(12);
+  crypto.getRandomValues(a);
+  return [...a].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function saveProfile() {
   try {
     localStorage.setItem('cozy-profile', JSON.stringify(profile));
@@ -87,7 +108,7 @@ function buildPicker() {
 
 function initJoin() {
   const params = new URLSearchParams(location.search);
-  $('nameInput').value = profile.name;
+  if (!$('nameInput').value) $('nameInput').value = profile.name; // don't clobber typing done while loading
   $('roomInput').value = params.get('room') || randomRoom();
   buildPicker();
   const go = () => {
@@ -122,7 +143,7 @@ function connect(room) {
 
   ws.addEventListener('open', () => {
     reconnectDelay = 500;
-    send({ t: 'join', room, name: profile.name, look: profile.look });
+    send({ t: 'join', room, name: profile.name, look: profile.look, token: profile.token });
   });
   ws.addEventListener('message', (e) => {
     let msg;
@@ -157,6 +178,7 @@ function makePlayer(p) {
     dir: p.dir || 'down',
     moving: !!p.moving,
     pose: p.pose || 'stand',
+    npc: p.npc || null, // a housemate's role, or null for real people
     animT: Math.random() * 10,
     bubble: null,
     shakeUntil: 0,
@@ -167,9 +189,13 @@ function onMessage(msg) {
   switch (msg.t) {
     case 'welcome': {
       const prev = state.players.get(state.myId);
+      me.seat = me.goingToSeat = null;
       state.myId = msg.id;
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, makePlayer(p));
+      state.cats.clear();
+      for (const c of msg.cats || []) updateCat(c);
+      Object.assign(CAT_NAMES, msg.catNames || {});
       const mine = state.players.get(msg.id);
       if (prev && isWalkable(prev.x, prev.y)) {
         // Reconnected: keep standing where we were.
@@ -181,10 +207,18 @@ function onMessage(msg) {
       hideStatus();
       $('hud').classList.remove('hidden');
       $('bottomBar').classList.remove('hidden');
+      if (TOUCH) $('joystick').classList.remove('hidden');
       $('roomName').textContent = msg.room;
       updateCount();
       sendState(true);
-      if (!prev) toast(`Welcome home, ${profile.name}! Tap the floor to walk, tap someone to interact.`);
+      if (!prev) syncSeat(mine);
+      if (!prev && msg.back) toast(`Welcome back, ${profile.name}! You're right where you left off.`);
+      else if (!prev)
+        toast(
+          TOUCH
+            ? `Welcome home, ${profile.name}! Use the joystick to walk, drag to look around.`
+            : `Welcome home, ${profile.name}! Click the floor to walk, drag to look around.`
+        );
       break;
     }
     case 'full':
@@ -193,12 +227,12 @@ function onMessage(msg) {
       break;
     case 'join':
       state.players.set(msg.player.id, makePlayer(msg.player));
-      toast(`${msg.player.name} came over 🏡`);
+      if (!msg.quiet) toast(`${msg.player.name} came over 🏡`);
       updateCount();
       break;
     case 'leave': {
       const p = state.players.get(msg.id);
-      if (p) toast(`${p.name} went home 👋`);
+      if (p && !msg.quiet) toast(`${p.name} went home 👋`);
       state.players.delete(msg.id);
       if (me.follow === msg.id) me.follow = null;
       if (me.pending && me.pending.target === msg.id) me.pending = null;
@@ -231,6 +265,43 @@ function onMessage(msg) {
       if (p) p.bubble = { text: msg.text, until: performance.now() + 5000 + msg.text.length * 60 };
       break;
     }
+    case 'cats':
+      for (const c of msg.c) updateCat(c);
+      break;
+    case 'catname':
+      CAT_NAMES[msg.id] = msg.name;
+      if (menuTarget === msg.id) $('menuName').textContent = msg.name;
+      break;
+    case 'catnames':
+      Object.assign(CAT_NAMES, msg.names);
+      break;
+    case 'catfx':
+      addEffect(msg.id, msg.emoji);
+      if (msg.by === state.myId) toast(msg.text);
+      break;
+    case 'notice':
+      toast(msg.text);
+      break;
+    case 'saves':
+      renderSaves(msg.list);
+      break;
+    case 'moveto': {
+      // A save was loaded: jump to where we were in it.
+      const mine = state.players.get(state.myId);
+      if (!mine) break;
+      me.path = null;
+      me.pending = null;
+      me.goingToSeat = null;
+      stopFollowing();
+      mine.x = mine.tx = msg.x;
+      mine.y = mine.ty = msg.y;
+      mine.dir = msg.dir;
+      mine.pose = msg.pose;
+      syncSeat(mine);
+      followMe();
+      sendState(true);
+      break;
+    }
     case 'emote':
       addEffect(msg.from, msg.emoji);
       break;
@@ -240,8 +311,29 @@ function onMessage(msg) {
   }
 }
 
+function updateCat([id, x, y, flip, anim, n]) {
+  let c = state.cats.get(id);
+  if (!c) {
+    c = { id, cat: true, x, y, tx: x, ty: y, flip, anim, n, started: performance.now() };
+    state.cats.set(id, c);
+  }
+  c.tx = x;
+  c.ty = y;
+  c.flip = !!flip;
+  if (c.n !== n || c.anim !== anim) {
+    c.anim = anim;
+    c.n = n;
+    c.started = performance.now();
+  }
+}
+
+// Cats' names come from the house (they can be renamed).
+const CAT_NAMES = { tabby: 'Biscuit', black: 'Pepper' };
+
 function updateCount() {
-  $('playerCount').textContent = state.players.size;
+  $('playerCount').textContent = [...state.players.values()].filter((p) => !p.npc).length;
+  const npcs = [...state.players.values()].filter((p) => p.npc).length;
+  $('npcCount').textContent = npcs ? `${npcs} of 6 added so far.` : '';
 }
 
 let lastSent = '';
@@ -288,6 +380,7 @@ function onAction(from, to, action) {
       faceEachOther(a, b);
       break;
     case 'highfive':
+      a.actionAnim = { row: 'jump', start: performance.now(), dur: 600 };
       addEffect(from, '✋');
       addEffect(to, '✋');
       addEffect(from, '✨', { midTo: to });
@@ -305,6 +398,7 @@ function onAction(from, to, action) {
       if (toMe) toast(`${a.name} sent you some love ❤️`);
       break;
     case 'poke':
+      a.actionAnim = { row: 'attack', start: performance.now(), dur: 600 };
       addEffect(to, '❗');
       b.shakeUntil = performance.now() + 500;
       if (toMe) toast(`${a.name} poked you 👉`);
@@ -342,6 +436,7 @@ function dirToward(a, b) {
 
 function startDancing() {
   const mine = state.players.get(state.myId);
+  leaveSeat();
   me.danceUntil = performance.now() + 5000;
   mine.pose = 'dance';
   sendState(true);
@@ -352,6 +447,8 @@ function doAction(targetId, action) {
   const target = state.players.get(targetId);
   if (!mine || !target) return;
   if (action === 'follow') {
+    leaveSeat();
+    me.goingToSeat = null;
     me.follow = targetId;
     me.pending = null;
     send({ t: 'action', target: targetId, action: 'follow' });
@@ -362,7 +459,7 @@ function doAction(targetId, action) {
     stopFollowing();
     return;
   }
-  if (ACTIONS[action].near && Math.hypot(target.x - mine.x, target.y - mine.y) > NEAR) {
+  if (ACTIONS[action].near && !closeEnough(mine, target)) {
     // Walk over first, then do it.
     me.follow = null;
     me.pending = { target: targetId, action };
@@ -372,11 +469,23 @@ function doAction(targetId, action) {
   send({ t: 'action', target: targetId, action });
 }
 
+// Close enough to hug or high five. Someone in bed or on the couch can be
+// reached from beside the furniture.
+function closeEnough(a, b) {
+  const d = Math.hypot(b.x - a.x, b.y - a.y);
+  return d <= NEAR || ((!!seatAt(b.x, b.y) || !isWalkable(b.x, b.y)) && d <= 95);
+}
+
 function stopFollowing() {
   if (me.follow != null) {
     send({ t: 'action', target: me.follow, action: 'unfollow' });
     me.follow = null;
   }
+}
+
+// A player (numeric id) or a cat (string id).
+function entity(id) {
+  return state.players.get(id) || state.cats.get(id);
 }
 
 function addEffect(playerId, emoji, opts = {}) {
@@ -397,7 +506,12 @@ function openMenu(id, screenX, screenY) {
   const menu = $('actionMenu');
   drawPortrait($('menuPortrait'), p.look);
   $('menuName').textContent = isMe ? `${p.name} (you)` : p.name;
-  $('menuSub').textContent = isMe ? 'What do you want to do?' : `In the ${roomAt(p.x, p.y)}`;
+  const where = roomAt(p.x, p.y) === 'doorway' ? 'in a doorway' : `in the ${roomAt(p.x, p.y)}`;
+  $('menuSub').textContent = isMe
+    ? 'What do you want to do?'
+    : p.npc
+      ? `${ROLE_INFO[p.npc]?.emoji} ${ROLE_INFO[p.npc]?.title} · ${where}`
+      : where[0].toUpperCase() + where.slice(1);
 
   const box = $('menuButtons');
   box.innerHTML = '';
@@ -453,15 +567,109 @@ function openMenu(id, screenX, screenY) {
     if (me.follow === id) add('🛑 Stop following', () => doAction(id, 'unfollow'), 'wide');
     else add('👣 Follow', () => doAction(id, 'follow'), 'wide');
     add('🚶 Walk over', () => walkTo(p.x, p.y + 20), 'wide');
+    if (p.npc) add('🏠 Send home', () => send({ t: 'removeNpc', id: p.id }), 'wide');
   }
 
+  placeMenu(screenX, screenY);
+}
+
+function placeMenu(screenX, screenY) {
+  const menu = $('actionMenu');
   menu.classList.remove('hidden');
-  const r = menu.getBoundingClientRect();
+  // Layout size, not getBoundingClientRect: the pop-in animation scales it down.
+  const r = { width: menu.offsetWidth, height: menu.offsetHeight };
   const x = Math.min(Math.max(8, screenX - r.width / 2), innerWidth - r.width - 8);
   let y = screenY + 16;
   if (y + r.height > innerHeight - 70) y = Math.max(8, screenY - r.height - 70);
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
+}
+
+const CAT_ACTIONS = {
+  pet: { label: '🤚 Pet', near: true },
+  play: { label: '🧶 Play', near: true },
+  tease: { label: '😼 Tease', near: true },
+  call: { label: '🐾 Call over', near: false },
+};
+
+const CAT_MOODS = {
+  sleep: 'Fast asleep',
+  play: 'Playing with yarn',
+  walk: 'Wandering around',
+  loaf: 'Loafing',
+  attack: 'Feeling feisty',
+  jump: 'Mid-jump!',
+  idle: 'Just hanging out',
+};
+
+function openCatMenu(c, screenX, screenY) {
+  menuTarget = c.id;
+  const menu = $('actionMenu');
+  drawCatPortrait($('menuPortrait'), c.id);
+  $('menuName').textContent = CAT_NAMES[c.id] || 'Cat';
+  $('menuSub').textContent = `${CAT_MOODS[c.anim] || 'Being a cat'} · ${roomAt(c.x, c.y) === 'doorway' ? 'in a doorway' : 'in the ' + roomAt(c.x, c.y)}`;
+  const box = $('menuButtons');
+  box.innerHTML = '';
+  for (const [action, a] of Object.entries(CAT_ACTIONS)) {
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.textContent = a.label;
+    b.addEventListener('click', () => {
+      doCatAction(c.id, action);
+      closeMenu();
+    });
+    box.append(b);
+  }
+  const rename = document.createElement('button');
+  rename.className = 'btn wide';
+  rename.textContent = '✏️ Rename';
+  rename.addEventListener('click', () => showCatRename(c.id));
+  box.append(rename);
+  placeMenu(screenX, screenY);
+}
+
+// Swap the cat's buttons for a name box.
+function showCatRename(id) {
+  const box = $('menuButtons');
+  box.innerHTML = '';
+  const form = document.createElement('form');
+  form.className = 'rename wide';
+  form.autocomplete = 'off';
+  const input = document.createElement('input');
+  input.id = 'catNameInput';
+  input.maxLength = 16;
+  input.value = CAT_NAMES[id] || '';
+  input.setAttribute('aria-label', 'Cat name');
+  input.enterKeyHint = 'done';
+  const save = document.createElement('button');
+  save.className = 'btn primary';
+  save.type = 'submit';
+  save.textContent = 'Save';
+  form.append(input, save);
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (name && name !== CAT_NAMES[id]) send({ t: 'renameCat', id, name });
+    input.blur();
+    closeMenu();
+  });
+  box.append(form);
+  releaseJoy();
+  input.focus();
+  input.select();
+}
+
+function doCatAction(id, action) {
+  const mine = state.players.get(state.myId);
+  const c = state.cats.get(id);
+  if (!mine || !c) return;
+  if (CAT_ACTIONS[action].near && !closeEnough(mine, c)) {
+    me.follow = null;
+    me.pending = { target: id, action, cat: true };
+    walkTo(c.x, c.y);
+    return;
+  }
+  send({ t: 'cat', id, action });
 }
 
 function closeMenu() {
@@ -471,6 +679,8 @@ function closeMenu() {
 
 function setPose(pose) {
   const mine = state.players.get(state.myId);
+  leaveSeat();
+  me.goingToSeat = null;
   me.path = null;
   stopFollowing();
   me.danceUntil = 0;
@@ -481,6 +691,70 @@ function setPose(pose) {
 
 function emote(e) {
   send({ t: 'emote', emoji: e });
+}
+
+// ---------------------------------------------------------------------------
+// Furniture: walk to a seat's entry point, then sit / lie down
+// ---------------------------------------------------------------------------
+
+const furnitureOf = (seat) => FURNITURE.find((f) => f.seats.includes(seat));
+
+function seatTaken(seat) {
+  for (const p of state.players.values()) {
+    if (p.id !== state.myId && Math.hypot(p.tx - seat.x, p.ty - seat.y) < 4) return true;
+  }
+  return false;
+}
+
+function useFurniture(f) {
+  const mine = state.players.get(state.myId);
+  if (!mine || (me.seat && f.seats.includes(me.seat))) return;
+  const free = f.seats.filter((s) => !seatTaken(s));
+  if (!free.length) {
+    toast(`Someone's already using the ${f.name}`);
+    return;
+  }
+  // The seat whose way in is closest to where we're standing.
+  const near = (s) => Math.hypot(s.entry.x - mine.x, s.entry.y - mine.y);
+  const seat = free.sort((a, b) => near(a) - near(b))[0];
+  me.pending = null;
+  stopFollowing();
+  walkTo(seat.entry.x, seat.entry.y);
+  me.goingToSeat = seat;
+}
+
+function sitIn(seat) {
+  const mine = state.players.get(state.myId);
+  const f = furnitureOf(seat);
+  mine.x = seat.x;
+  mine.y = seat.y;
+  mine.dir = seat.dir;
+  mine.pose = f.pose;
+  me.seat = seat;
+  me.path = null;
+  me.danceUntil = 0;
+  if (f.pose === 'bed') addEffect(state.myId, '💤');
+  sendState(true);
+}
+
+// If we've been placed in a seat (coming back, or a save was loaded), sit in it
+// properly so getting up works.
+function syncSeat(mine) {
+  me.seat = null;
+  for (const f of FURNITURE) {
+    for (const s of f.seats) if (Math.abs(s.x - mine.x) < 1 && Math.abs(s.y - mine.y) < 1) me.seat = s;
+  }
+}
+
+// Get up and step back out the way we came in.
+function leaveSeat() {
+  if (!me.seat) return;
+  const mine = state.players.get(state.myId);
+  mine.x = me.seat.entry.x;
+  mine.y = me.seat.entry.y;
+  mine.pose = 'stand';
+  me.seat = null;
+  sendState(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -502,6 +776,8 @@ addEventListener('keydown', (e) => {
     e.preventDefault();
   } else if (k === 'escape') {
     closeMenu();
+    closeSaves();
+    closeAdd();
     $('emoteTray').classList.add('hidden');
   }
 });
@@ -509,14 +785,34 @@ addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
 
 let down = null;
+// One finger (or the mouse) on the map: a drag pans the view, a tap interacts.
 canvas.addEventListener('pointerdown', (e) => {
-  down = { x: e.clientX, y: e.clientY, t: performance.now() };
+  if (down) return; // ignore a second finger
+  down = { id: e.pointerId, x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, dragging: false };
+  try {
+    canvas.setPointerCapture(e.pointerId);
+  } catch {}
 });
+canvas.addEventListener('pointermove', (e) => {
+  if (!down || e.pointerId !== down.id) return;
+  if (!down.dragging && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) {
+    down.dragging = true;
+    state.camFree = true;
+    $('recenterBtn').classList.remove('hidden');
+  }
+  if (down.dragging) {
+    view.camX -= (e.clientX - down.lastX) / view.zoom;
+    view.camY -= (e.clientY - down.lastY) / view.zoom;
+  }
+  down.lastX = e.clientX;
+  down.lastY = e.clientY;
+});
+canvas.addEventListener('pointercancel', () => (down = null));
 canvas.addEventListener('pointerup', (e) => {
-  if (!down || !joined) return;
-  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+  if (!down || e.pointerId !== down.id) return;
+  const wasDrag = down.dragging;
   down = null;
-  if (moved > 20) return;
+  if (wasDrag || !joined) return;
   $('emoteTray').classList.add('hidden');
   if (document.activeElement === $('chatInput')) $('chatInput').blur();
   if (!$('actionMenu').classList.contains('hidden')) {
@@ -524,16 +820,80 @@ canvas.addEventListener('pointerup', (e) => {
     return;
   }
   const w = screenToWorld(e.clientX, e.clientY);
+  const cat = pickCat(w.x, w.y);
+  if (cat) {
+    openCatMenu(cat, e.clientX, e.clientY);
+    return;
+  }
   const hit = pickPlayer(w.x, w.y);
   if (hit) {
     openMenu(hit.id, e.clientX, e.clientY);
     return;
   }
+  const furniture = furnitureAt(w.x, w.y);
+  if (furniture) {
+    useFurniture(furniture);
+    state.ripples.push({ x: w.x, y: w.y, t0: performance.now(), ok: true });
+    return;
+  }
+  if (TOUCH) return; // on phones you walk with the joystick
   me.pending = null;
   stopFollowing();
   walkTo(w.x, w.y);
   state.ripples.push({ x: w.x, y: w.y, t0: performance.now(), ok: !!me.path });
 });
+
+function followMe() {
+  state.camFree = false;
+  $('recenterBtn').classList.add('hidden');
+}
+$('recenterBtn').addEventListener('click', followMe);
+
+// ---- Joystick ----
+const joy = { x: 0, y: 0, id: null };
+const JOY_R = 46; // how far the knob travels, in px
+
+function setJoy(e) {
+  const r = $('joystick').getBoundingClientRect();
+  let dx = e.clientX - (r.left + r.width / 2);
+  let dy = e.clientY - (r.top + r.height / 2);
+  const d = Math.hypot(dx, dy);
+  if (d > JOY_R) {
+    dx = (dx / d) * JOY_R;
+    dy = (dy / d) * JOY_R;
+  }
+  joy.x = dx / JOY_R;
+  joy.y = dy / JOY_R;
+  $('joyKnob').style.transform = `translate(${dx}px, ${dy}px)`;
+}
+function releaseJoy() {
+  joy.x = joy.y = 0;
+  joy.id = null;
+  $('joyKnob').style.transform = '';
+  $('joystick').classList.remove('active');
+}
+$('joystick').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  joy.id = e.pointerId;
+  try {
+    $('joystick').setPointerCapture(e.pointerId);
+  } catch {}
+  $('joystick').classList.add('active');
+  closeMenu();
+  $('emoteTray').classList.add('hidden');
+  setJoy(e);
+});
+$('joystick').addEventListener('pointermove', (e) => e.pointerId === joy.id && setJoy(e));
+$('joystick').addEventListener('pointerup', (e) => e.pointerId === joy.id && releaseJoy());
+$('joystick').addEventListener('pointercancel', releaseJoy);
+
+function pickCat(wx, wy) {
+  const pad = 6 / view.zoom;
+  for (const c of [...state.cats.values()].sort((a, b) => b.y - a.y)) {
+    if (Math.abs(wx - c.x) <= 22 + pad && wy >= c.y - CAT_H - pad && wy <= c.y + 5 + pad) return c;
+  }
+  return null;
+}
 
 function pickPlayer(wx, wy) {
   // Front-most (largest y) first; generous hit box for fingers.
@@ -553,6 +913,9 @@ function pickPlayer(wx, wy) {
 function walkTo(x, y) {
   const mine = state.players.get(state.myId);
   if (!mine) return;
+  leaveSeat();
+  me.goingToSeat = null;
+  followMe();
   me.path = findPath(mine.x, mine.y, x, y);
   if (me.path && mine.pose !== 'stand') {
     mine.pose = 'stand';
@@ -592,6 +955,14 @@ $('chatForm').addEventListener('submit', (e) => {
   $('chatInput').value = '';
   $('chatInput').blur();
 });
+$('chatBtn').addEventListener('click', () => {
+  releaseJoy();
+  $('emoteTray').classList.add('hidden');
+  document.body.classList.add('chatting');
+  $('chatInput').focus();
+});
+// Closing the keyboard (or sending) puts the joystick back.
+$('chatInput').addEventListener('blur', () => setTimeout(() => document.body.classList.remove('chatting'), 50));
 $('emoteBtn').addEventListener('click', () => $('emoteTray').classList.toggle('hidden'));
 for (const e of EMOTES) {
   const b = document.createElement('button');
@@ -602,6 +973,138 @@ for (const e of EMOTES) {
   });
   $('emoteTray').append(b);
 }
+
+// ---------------------------------------------------------------------------
+// Add a housemate
+// ---------------------------------------------------------------------------
+
+const addChoice = { role: 'animator', look: 0 };
+
+function openAdd() {
+  closeMenu();
+  closeSaves();
+  releaseJoy();
+  const roles = $('roleList');
+  roles.innerHTML = '';
+  for (const [key, r] of Object.entries(ROLE_INFO)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'role' + (key === addChoice.role ? ' selected' : '');
+    for (const [cls, text] of [['role-emoji', r.emoji], ['role-title', r.title], ['role-about', r.about]]) {
+      const el = document.createElement('span');
+      el.className = cls;
+      el.textContent = text;
+      b.append(el);
+    }
+    b.addEventListener('click', () => {
+      addChoice.role = key;
+      roles.querySelectorAll('.role').forEach((el) => el.classList.remove('selected'));
+      b.classList.add('selected');
+    });
+    roles.append(b);
+  }
+  const looks = $('npcLooks');
+  looks.innerHTML = '';
+  LOOKS.forEach((_, i) =>
+    looks.append(
+      lookButton(i, i === addChoice.look, (idx, btn) => {
+        addChoice.look = idx;
+        looks.querySelectorAll('.look').forEach((el) => el.classList.remove('selected'));
+        btn.classList.add('selected');
+      })
+    )
+  );
+  updateCount();
+  $('addPanel').classList.remove('hidden');
+}
+function closeAdd() {
+  $('addPanel').classList.add('hidden');
+}
+
+$('addBtn').addEventListener('click', openAdd);
+$('addClose').addEventListener('click', closeAdd);
+$('addPanel').addEventListener('click', (e) => e.target === $('addPanel') && closeAdd());
+$('addNpcBtn').addEventListener('click', () => {
+  send({ t: 'addNpc', role: addChoice.role, look: addChoice.look, name: $('npcName').value.trim() });
+  $('npcName').value = '';
+  closeAdd();
+});
+
+// ---------------------------------------------------------------------------
+// Save files
+// ---------------------------------------------------------------------------
+
+function openSaves() {
+  closeMenu();
+  releaseJoy();
+  $('savesPanel').classList.remove('hidden');
+  $('savesList').innerHTML = '<div class="saves-empty">Loading saves…</div>';
+  send({ t: 'saves' });
+}
+function closeSaves() {
+  $('savesPanel').classList.add('hidden');
+}
+
+function renderSaves(list) {
+  const box = $('savesList');
+  box.innerHTML = '';
+  if (!list.length) {
+    box.innerHTML = '<div class="saves-empty">No saves yet. Name one above to make your first.</div>';
+    return;
+  }
+  for (const s of [...list].reverse()) {
+    const item = document.createElement('div');
+    item.className = 'save-item';
+    const name = document.createElement('div');
+    name.className = 'save-name';
+    name.textContent = s.name;
+    const meta = document.createElement('div');
+    meta.className = 'save-meta';
+    const when = new Date(s.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    meta.textContent = `${when} · ${s.who.length ? s.who.join(', ') : 'nobody'}`;
+    const actions = document.createElement('div');
+    actions.className = 'save-actions';
+    const load = document.createElement('button');
+    load.className = 'btn primary';
+    load.textContent = 'Load';
+    load.addEventListener('click', () => {
+      send({ t: 'load', id: s.id });
+      closeSaves();
+    });
+    // Delete takes two taps, so a stray tap can't lose a save.
+    const del = document.createElement('button');
+    del.className = 'btn danger';
+    del.textContent = 'Delete';
+    del.addEventListener('click', () => {
+      if (!del.classList.contains('armed')) {
+        del.classList.add('armed');
+        del.textContent = 'Sure?';
+        setTimeout(() => {
+          del.classList.remove('armed');
+          del.textContent = 'Delete';
+        }, 3000);
+        return;
+      }
+      send({ t: 'deleteSave', id: s.id });
+    });
+    actions.append(load, del);
+    item.append(name, actions, meta);
+    box.append(item);
+  }
+}
+
+$('savesBtn').addEventListener('click', openSaves);
+$('savesClose').addEventListener('click', closeSaves);
+$('savesPanel').addEventListener('click', (e) => e.target === $('savesPanel') && closeSaves());
+$('saveForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name =
+    $('saveName').value.trim() ||
+    new Date().toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' });
+  send({ t: 'save', name });
+  $('saveName').value = '';
+  $('saveName').blur();
+});
 
 // ---------------------------------------------------------------------------
 // Toasts / status
@@ -636,8 +1139,18 @@ function updateMe(dt, now) {
   if (keys.has('arrowright') || keys.has('d')) vx += 1;
   if (keys.has('arrowup') || keys.has('w')) vy -= 1;
   if (keys.has('arrowdown') || keys.has('s')) vy += 1;
+  let speedMul = 1;
+  const tilt = Math.hypot(joy.x, joy.y);
+  if (tilt > 0.18) {
+    vx = joy.x;
+    vy = joy.y;
+    speedMul = Math.min(1, Math.max(0.45, tilt * 1.2)); // push further to go faster
+  }
 
   if (vx || vy) {
+    if (state.camFree) followMe();
+    leaveSeat();
+    me.goingToSeat = null;
     me.path = null;
     me.pending = null;
     stopFollowing();
@@ -653,11 +1166,12 @@ function updateMe(dt, now) {
   }
   // Walking over to do something: re-plan if they move.
   if (me.pending && now > me.repathAt) {
-    const t = state.players.get(me.pending.target);
+    const t = me.pending.cat ? state.cats.get(me.pending.target) : state.players.get(me.pending.target);
     me.repathAt = now + 400;
     if (!t) me.pending = null;
-    else if (Math.hypot(t.x - mine.x, t.y - mine.y) <= NEAR) {
-      send({ t: 'action', target: t.id, action: me.pending.action });
+    else if (closeEnough(mine, t)) {
+      if (me.pending.cat) send({ t: 'cat', id: t.id, action: me.pending.action });
+      else send({ t: 'action', target: t.id, action: me.pending.action });
       me.pending = null;
       me.path = null;
     } else me.path = findPath(mine.x, mine.y, t.x, t.y);
@@ -681,7 +1195,7 @@ function updateMe(dt, now) {
   const moving = !!(vx || vy);
   if (moving) {
     const len = Math.hypot(vx, vy);
-    const step = Math.min(SPEED * dt, me.path && me.path[0] ? Math.hypot(me.path[0].x - mine.x, me.path[0].y - mine.y) : Infinity);
+    const step = Math.min(SPEED * speedMul * dt, me.path && me.path[0] ? Math.hypot(me.path[0].x - mine.x, me.path[0].y - mine.y) : Infinity);
     const n = moveWithCollision(mine.x, mine.y, (vx / len) * step, (vy / len) * step);
     const actuallyMoved = Math.hypot(n.x - mine.x, n.y - mine.y) > 0.01;
     mine.x = n.x;
@@ -698,6 +1212,13 @@ function updateMe(dt, now) {
     mine.moving = false;
   }
 
+  // Reached the way onto the furniture: get on.
+  if (me.goingToSeat && !(me.path && me.path.length)) {
+    const seat = me.goingToSeat;
+    me.goingToSeat = null;
+    if (Math.hypot(mine.x - seat.entry.x, mine.y - seat.entry.y) < 10 && !seatTaken(seat)) sitIn(seat);
+  }
+
   if (mine.pose === 'dance' && me.danceUntil && now > me.danceUntil) {
     mine.pose = 'stand';
     me.danceUntil = 0;
@@ -707,6 +1228,15 @@ function updateMe(dt, now) {
 
 function updateOthers(dt) {
   const k = 1 - Math.exp(-dt * 12);
+  for (const c of state.cats.values()) {
+    if (Math.hypot(c.tx - c.x, c.ty - c.y) > 150) {
+      c.x = c.tx;
+      c.y = c.ty;
+    } else {
+      c.x += (c.tx - c.x) * k;
+      c.y += (c.ty - c.y) * k;
+    }
+  }
   for (const p of state.players.values()) {
     if (p.id === state.myId) continue;
     const d = Math.hypot(p.tx - p.x, p.ty - p.y);
@@ -752,8 +1282,16 @@ function updateCamera(dt) {
   // Keep the camera on the house; centre it when the view is larger than the house.
   const minX = 160 + halfW, maxX = 1400 - halfW;
   const minY = 10 + halfH, maxY = 900 - halfH;
-  const tx = minX > maxX ? (160 + 1400) / 2 : Math.min(maxX, Math.max(minX, target.x));
-  const ty = minY > maxY ? (10 + 900) / 2 : Math.min(maxY, Math.max(minY, target.y));
+  const clampX = (x) => (minX > maxX ? (160 + 1400) / 2 : Math.min(maxX, Math.max(minX, x)));
+  const clampY = (y) => (minY > maxY ? (10 + 900) / 2 : Math.min(maxY, Math.max(minY, y)));
+  if (state.camFree) {
+    // Looking around: stay where the finger left it, but keep the house in view.
+    view.camX = clampX(view.camX);
+    view.camY = clampY(view.camY);
+    return;
+  }
+  const tx = clampX(target.x);
+  const ty = clampY(target.y);
   const k = 1 - Math.exp(-dt * 6);
   view.camX += (tx - view.camX) * k;
   view.camY += (ty - view.camY) * k;
@@ -788,7 +1326,18 @@ function render(now) {
   }
 
   const list = [...state.players.values()].sort((a, b) => a.y - b.y);
-  for (const p of list) drawPlayer(p, now);
+  const scene = [...list, ...state.cats.values()].sort((a, b) => a.y - b.y);
+  for (const e of scene) {
+    if (e.cat) {
+      if (e.anim !== 'jump') {
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
+        ctx.beginPath();
+        ctx.ellipse(e.x, e.y, 14, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      drawCat(ctx, e.id, e.x, e.y, e.flip, e.anim, now - e.started, now);
+    } else drawPlayer(e, now);
+  }
 
   // Screen-space overlay: names, bubbles, effects (crisp text at any zoom)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -804,12 +1353,14 @@ function drawPlayer(p, now) {
   if (now < p.shakeUntil) sx += Math.sin(now / 25) * 2;
 
   // Shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.beginPath();
-  ctx.ellipse(p.x, p.y, p.pose === 'sleep' ? 30 : 13, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
+  if (p.pose !== 'bed') {
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, p.pose === 'sleep' ? 30 : 13, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
-  if (mine) {
+  if (mine && p.pose !== 'bed') {
     ctx.strokeStyle = 'rgba(255, 230, 150, 0.9)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -817,7 +1368,13 @@ function drawPlayer(p, now) {
     ctx.stroke();
   }
 
-  drawCharacter(ctx, p.look, sx, p.y, p.dir, moving, p.pose, now, p.animT);
+  let action = null;
+  if (p.actionAnim) {
+    const ms = performance.now() - p.actionAnim.start;
+    if (ms < p.actionAnim.dur && !p.moving) action = { row: p.actionAnim.row, ms };
+    else p.actionAnim = null;
+  }
+  drawCharacter(ctx, p.look, sx, p.y, p.dir, moving, p.pose, now, p.animT, { seated: !!seatAt(p.x, p.y), action });
 }
 
 function drawLabels(p, now) {
@@ -827,7 +1384,7 @@ function drawLabels(p, now) {
   ctx.font = `700 ${fs}px ui-rounded, Nunito, system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  const label = p.name + (me.follow === p.id ? ' 👣' : '');
+  const label = (p.npc ? `${ROLE_INFO[p.npc]?.emoji || ''} ` : '') + p.name + (me.follow === p.id ? ' 👣' : '');
   const w = ctx.measureText(label).width + 10;
   ctx.fillStyle = mine ? 'rgba(227,163,59,0.92)' : 'rgba(42,26,18,0.72)';
   roundRect(head.x - w / 2, head.y - fs - 6, w, fs + 5, 6);
@@ -835,7 +1392,7 @@ function drawLabels(p, now) {
   ctx.fillStyle = mine ? '#2a1a12' : '#fbf1dc';
   ctx.fillText(label, head.x, head.y - 2);
 
-  if (p.pose === 'sleep') {
+  if (p.pose === 'sleep' || p.pose === 'bed') {
     const t = (now / 1000) % 2;
     ctx.font = `${fs + 2}px sans-serif`;
     ctx.globalAlpha = 1 - t / 2;
@@ -893,13 +1450,13 @@ function wrap(text, maxW) {
 
 function drawEffects(now) {
   const DUR = 1600;
-  state.effects = state.effects.filter((e) => now - e.t0 < DUR && state.players.has(e.playerId));
+  state.effects = state.effects.filter((e) => now - e.t0 < DUR && entity(e.playerId));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const e of state.effects) {
     const t = (now - e.t0) / DUR;
-    const p = state.players.get(e.playerId);
-    let wx = p.x, wy = p.y - CHAR_H - 10;
+    const p = entity(e.playerId);
+    let wx = p.x, wy = p.y - (p.cat ? CAT_H + 6 : CHAR_H + 10);
     const other = state.players.get(e.flyTo ?? e.midTo);
     if (other && e.flyTo != null) {
       wx = p.x + (other.x - p.x) * t;
@@ -946,9 +1503,9 @@ function loop(now) {
 }
 
 // Debug hook for automated tests.
-window.__cozy = { state, me, walkTo, view };
+window.__cozy = { state, me, walkTo, view, send };
 
-loadCharacters().then(() => {
+Promise.all([loadCharacters(), loadCats()]).then(() => {
   profile.look = ((profile.look % LOOKS.length) + LOOKS.length) % LOOKS.length;
   initJoin();
   requestAnimationFrame(loop);
