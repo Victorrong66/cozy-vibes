@@ -14,7 +14,7 @@ const NEAR = 44; // how close you need to be to hug / high five
 const EMOTES = ['😀', '😂', '😍', '😮', '😢', '😡', '👍', '💤', '🎉', '❤️'];
 
 const houseImg = new Image();
-houseImg.src = 'assets/house.png';
+houseImg.src = window.COZY_HOUSE_SRC || 'assets/house.png'; // the offline preview embeds it
 
 const state = {
   myId: null,

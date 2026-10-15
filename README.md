@@ -31,6 +31,12 @@ npm run check      # syntax check + wall/door collision tests
 To try it on your phone while running it on your computer, open
 `http://<your-computer's-local-IP>:3000` with the phone on the same Wi-Fi.
 
+### Offline preview
+
+`node tools/build_preview.mjs` builds `dist/preview.html`, a single file you can open
+anywhere with no server. Everything's embedded, and two bot housemates (Mochi and Bao)
+keep you company in place of real players.
+
 ## Hosting on Cloudflare
 
 It's multiplayer, so it runs as a **Cloudflare Worker** with a **Durable Object** per
