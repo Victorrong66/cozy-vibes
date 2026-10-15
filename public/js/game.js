@@ -117,7 +117,7 @@ let reconnectDelay = 500;
 function connect(room) {
   state.room = room;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}`);
+  ws = new WebSocket(`${proto}://${location.host}/ws?room=${encodeURIComponent(room)}`);
   showStatus(joined ? 'Reconnecting…' : 'Entering the house…');
 
   ws.addEventListener('open', () => {

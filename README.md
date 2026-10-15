@@ -23,27 +23,41 @@ into the bedroom and one into the office, and the front door stays shut.
 
 ```bash
 npm install
-npm start          # http://localhost:3000
+npm start          # plain Node server: http://localhost:3000
+npm run dev        # or the Cloudflare version locally: http://localhost:8787
 npm run check      # syntax check + wall/door collision tests
 ```
 
 To try it on your phone while running it on your computer, open
 `http://<your-computer's-local-IP>:3000` with the phone on the same Wi-Fi.
 
-## Putting it online
+## Hosting on Cloudflare
 
-Since it's multiplayer, it needs a small Node server (static hosting like GitHub Pages
-won't work). Any host that runs Node and supports WebSockets will do. The easiest:
+It's multiplayer, so it runs as a **Cloudflare Worker** with a **Durable Object** per
+house (that's what keeps everyone in a house connected), plus the game files as static
+assets. Plain Cloudflare *Pages* won't work, because it can't hold the live connections.
+Everything fits in Cloudflare's free plan.
 
-**Render (free tier):** New → Blueprint → pick this repo. It reads `render.yaml`.
-Railway, Fly.io and Glitch also work; the start command is `npm start` and the server
-listens on `$PORT`.
+**Option A: connect the GitHub repo (deploys on every push)**
+1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Import a repository**.
+2. Pick this repo. Use `npm install` as the build command and `npx wrangler deploy` as
+   the deploy command. Everything else comes from `wrangler.jsonc`.
+3. You'll get a `cozy-vibes.<you>.workers.dev` link. To use your own domain, go to the
+   Worker → **Settings** → **Domains & Routes**.
+
+**Option B: from your computer**
+```bash
+npx wrangler login
+npm run deploy
+```
 
 ## How it's put together
 
 | File | What it does |
 | --- | --- |
-| `server.js` | Serves the game and relays players between everyone in a house over WebSockets. It also rejects positions inside walls. |
+| `src/room.js` | The multiplayer server logic for one house: joining, movement, actions, chat. It rejects positions inside walls. |
+| `worker/index.js` | Cloudflare entry point: one Durable Object per house code, each running a `Room`. |
+| `server.js` | The same `Room` on plain Node, for running locally or on any Node host. |
 | `public/js/map.js` | The floor plan: walkable areas, doors, blockers, collision and pathfinding. The server and browser share it. |
 | `public/js/characters.js` | Loads the character sprite sheets and draws the walk, sit, nap and dance animations. |
 | `public/js/game.js` | Rendering, controls, camera, action menu, chat, emotes. |
