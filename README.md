@@ -105,6 +105,14 @@ Coordinates are in pixels of `house.png` (1536×1024). Edit `AREAS` in `map.js` 
 where people can stand, add to `BLOCKERS` for solid furniture, or add to `FURNITURE` for things you can sit or lie on (each seat has an entry point that decides which side you get on from). Then run
 `npm run check`.
 
+### Boundary editor
+
+`tools/boundary-editor/index.html` is a small page that shows the map with every no-walk
+box. Tap a box to pick it, drag it to move it, drag its corners to resize it, add or delete
+boxes, then Save (or Copy as text). Green dots mark the ways onto the bed, couch and desk
+and turn red if a box covers one. The saved boxes go into `BLOCKERS` in
+`public/js/map.js`.
+
 ### Marking no-walk areas on a picture
 
 Paint red over a copy of `public/assets/house.png` wherever characters shouldn't stand, save

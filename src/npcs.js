@@ -60,7 +60,7 @@ const ROUTINES = {
   plants: {
     names: ['Fern', 'Ivy', 'Basil', 'Sage'],
     activities: [
-      { w: 6, spots: [{ x: 292, y: 350 }, { x: 755, y: 312 }, { x: 1240, y: 205 }, { x: 1078, y: 692 }, { x: 1300, y: 640 }, { x: 545, y: 690 }, { x: 1080, y: 560 }], stay: [8, 16], emote: '💧' },
+      { w: 6, spots: [{ x: 305, y: 330 }, { x: 755, y: 312 }, { x: 1240, y: 205 }, { x: 1078, y: 692 }, { x: 1300, y: 640 }, { x: 545, y: 690 }, { x: 1080, y: 560 }], stay: [8, 16], emote: '💧' },
       { w: 1, wander: true },
     ],
     lines: ['you’re growing so well 🌱', 'a little water for you 💧', 'this one needs more sun ☀️', 'new leaf! 🌿'],

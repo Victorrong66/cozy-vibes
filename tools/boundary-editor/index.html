@@ -1,0 +1,403 @@
+<title>Cozy Vibes Boundaries</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&display=swap">
+<style>
+  /* One warm wood-and-cream look to match the game; works on either host theme. */
+  :root {
+    --bg: #2a1d15;
+    --panel: #fbf1dc;
+    --panel-2: #f1e2c0;
+    --ink: #2a1a12;
+    --ink-soft: #6b5544;
+    --wood: #3b2416;
+    --accent: #e3a33b;
+    --box: #e0453a;
+    --box-sel: #ffd166;
+    --way: #3fbf6b;
+    --warn: #b3261e;
+    --font: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+  }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--panel); }
+  h1 { font-size: 1.25rem; font-weight: 900; margin: 0; letter-spacing: 0.2px; text-wrap: balance; }
+  .spacer { flex: 1; }
+  button {
+    font: inherit; font-weight: 800; color: var(--ink);
+    background: var(--panel); border: 2px solid var(--wood); border-radius: 10px;
+    padding: 7px 12px; min-height: 40px; cursor: pointer;
+    box-shadow: 0 3px 0 var(--wood); touch-action: manipulation;
+  }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--wood); }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); }
+  button.danger { background: #f3b2a6; }
+  button.round { width: 40px; padding: 0; font-size: 1.2rem; }
+  button[disabled] { opacity: 0.5; cursor: default; }
+  #status { font-size: 0.85rem; color: var(--panel-2); min-height: 1.2em; }
+  #status.warn { color: #ffb4a8; }
+
+  #stage {
+    position: relative; flex: 1 1 auto; min-height: 240px;
+    overflow: hidden; border-radius: 14px; border: 3px solid var(--wood);
+    background: #3d6e2f; touch-action: none; cursor: grab;
+  }
+  #world { position: absolute; left: 0; top: 0; width: 1536px; height: 1024px; transform-origin: 0 0; }
+  #world img { position: absolute; inset: 0; width: 1536px; height: 1024px; max-width: none; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+  #world svg { position: absolute; inset: 0; width: 1536px; height: 1024px; overflow: visible; }
+  .box { fill: rgba(224, 69, 58, 0.28); stroke: var(--box); stroke-width: 2; }
+  .box.sel { fill: rgba(255, 209, 102, 0.3); stroke: var(--box-sel); stroke-width: 3; }
+  .label { fill: #fff; font: 800 13px var(--font); paint-order: stroke; stroke: rgba(0,0,0,0.75); stroke-width: 3px; pointer-events: none; }
+  .handle { fill: var(--box-sel); stroke: var(--wood); stroke-width: 2; }
+  .way { fill: var(--way); stroke: #fff; stroke-width: 2; }
+  .way.blocked { fill: var(--warn); }
+  .way-label { fill: #eafff0; font: 800 11px var(--font); paint-order: stroke; stroke: rgba(0,0,0,0.8); stroke-width: 3px; pointer-events: none; }
+
+  #panel {
+    background: var(--panel); border: 3px solid var(--wood); border-radius: 14px;
+    padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  #panel .hint { color: var(--ink-soft); font-size: 0.9rem; flex: 1 1 100%; }
+  #nameInput {
+    flex: 1 1 160px; min-width: 0; font: inherit; font-size: 16px; font-weight: 700;
+    border: 2px solid var(--wood); border-radius: 10px; padding: 7px 10px; background: #fffaf0; color: var(--ink);
+  }
+  #coords { font-variant-numeric: tabular-nums; color: var(--ink-soft); font-size: 0.85rem; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
+</style>
+
+<header>
+  <h1>House boundaries</h1>
+  <span class="spacer"></span>
+  <button class="round" id="zoomOut" aria-label="Zoom out">−</button>
+  <button class="round" id="zoomIn" aria-label="Zoom in">+</button>
+  <button id="addBtn">＋ Box</button>
+  <button class="primary" id="saveBtn" disabled>Save</button>
+</header>
+<div id="status" role="status">Loading boundaries…</div>
+
+<div id="stage" aria-label="House map with no-walk boxes">
+  <div id="world">
+    <img src="house.jpg" alt="">
+    <svg id="svg" viewBox="0 0 1536 1024"></svg>
+  </div>
+</div>
+
+<div id="panel">
+  <div class="hint" id="hint">Red boxes are where feet can't go. Tap a box to pick it, then drag it to move it or drag its yellow corners to resize. Drag the empty map to look around. Green dots are the ways onto the bed, couch and desk, so keep boxes off them.</div>
+  <input id="nameInput" placeholder="Box name" maxlength="40" hidden>
+  <span id="coords" hidden></span>
+  <button class="danger" id="deleteBtn" hidden>Delete box</button>
+  <button id="copyBtn">Copy as text</button>
+</div>
+
+<script>
+(() => {
+  const MAP_W = 1536, MAP_H = 1024, MIN = 8;
+  // Where people step onto furniture (from the game's floor plan). Feet need
+  // about 9px each side and 6px up, so a box over these blocks the way in.
+  const WAYS = [
+    { name: 'bed', x: 918, y: 208 }, { name: 'bed', x: 1098, y: 208 },
+    { name: 'couch', x: 496, y: 482 }, { name: 'couch', x: 496, y: 566 },
+    { name: 'desk', x: 1171, y: 586 },
+  ];
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage'), world = $('world'), svg = $('svg');
+  const NS = 'http://www.w3.org/2000/svg';
+
+  let boxes = [];       // [{name, x1, y1, x2, y2}]
+  let sel = -1;
+  let dirty = false;
+  let saving = false;
+  let docRef = null;
+  const view = { s: 1, x: 0, y: 0 };
+
+  // ---------- view ----------
+  function fit() {
+    const r = stage.getBoundingClientRect();
+    view.s = Math.min(r.width / MAP_W, r.height / MAP_H);
+    view.x = (r.width - MAP_W * view.s) / 2;
+    view.y = (r.height - MAP_H * view.s) / 2;
+    apply();
+  }
+  function clampView() {
+    const r = stage.getBoundingClientRect();
+    const w = MAP_W * view.s, h = MAP_H * view.s;
+    view.x = w <= r.width ? (r.width - w) / 2 : Math.min(0, Math.max(r.width - w, view.x));
+    view.y = h <= r.height ? (r.height - h) / 2 : Math.min(0, Math.max(r.height - h, view.y));
+  }
+  function apply() {
+    clampView();
+    world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.s})`;
+    render();
+  }
+  function zoom(f, cx, cy) {
+    const r = stage.getBoundingClientRect();
+    const ox = cx ?? r.width / 2, oy = cy ?? r.height / 2;
+    const min = Math.min(r.width / MAP_W, r.height / MAP_H);
+    const s = Math.min(6, Math.max(min, view.s * f));
+    view.x = ox - ((ox - view.x) / view.s) * s;
+    view.y = oy - ((oy - view.y) / view.s) * s;
+    view.s = s;
+    apply();
+  }
+  const toMap = (e) => {
+    const r = stage.getBoundingClientRect();
+    return { x: (e.clientX - r.left - view.x) / view.s, y: (e.clientY - r.top - view.y) / view.s };
+  };
+
+  // ---------- drawing ----------
+  const wayBlocked = (w) => boxes.some((b) => w.x + 9 >= b.x1 && w.x - 9 <= b.x2 && w.y >= b.y1 && w.y - 6 <= b.y2);
+  function el(tag, attrs, parent) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    parent.appendChild(n);
+    return n;
+  }
+  function render() {
+    svg.textContent = '';
+    const hr = 13 / view.s; // corner handles stay finger-sized at any zoom
+    boxes.forEach((b, i) => {
+      el('rect', { x: b.x1, y: b.y1, width: b.x2 - b.x1, height: b.y2 - b.y1, class: 'box' + (i === sel ? ' sel' : '') }, svg);
+    });
+    boxes.forEach((b) => {
+      const t = el('text', { x: b.x1 + 4, y: b.y1 + 15, class: 'label' }, svg);
+      t.textContent = b.name;
+    });
+    for (const w of WAYS) {
+      el('circle', { cx: w.x, cy: w.y, r: 7, class: 'way' + (wayBlocked(w) ? ' blocked' : '') }, svg);
+      const t = el('text', { x: w.x + 10, y: w.y + 4, class: 'way-label' }, svg);
+      t.textContent = `way onto ${w.name}`;
+    }
+    if (sel >= 0) {
+      const b = boxes[sel];
+      for (const [cx, cy] of [[b.x1, b.y1], [b.x2, b.y1], [b.x1, b.y2], [b.x2, b.y2]]) el('circle', { cx, cy, r: hr, class: 'handle' }, svg);
+    }
+    renderPanel();
+  }
+  function renderPanel() {
+    const has = sel >= 0;
+    $('nameInput').hidden = $('coords').hidden = $('deleteBtn').hidden = !has;
+    $('hint').hidden = has;
+    if (has) {
+      const b = boxes[sel];
+      if (document.activeElement !== $('nameInput')) $('nameInput').value = b.name;
+      $('coords').textContent = `x ${b.x1}–${b.x2} · y ${b.y1}–${b.y2}`;
+    }
+    $('saveBtn').disabled = !dirty || saving || !docRef;
+    const blocked = WAYS.filter(wayBlocked).map((w) => w.name);
+    if (blocked.length) setStatus(`A box covers the way onto the ${[...new Set(blocked)].join(' and ')}. Nobody could get on it. Move the box off the red dot.`, true);
+    else if (statusMsg) setStatus(statusMsg, false);
+  }
+  let statusMsg = '';
+  function setStatus(text, warn) {
+    $('status').textContent = text;
+    $('status').classList.toggle('warn', !!warn);
+  }
+  function note(text) {
+    statusMsg = text;
+    setStatus(text, false);
+    renderPanel();
+  }
+  function changed() {
+    dirty = true;
+    note('Unsaved changes. Tap Save when you\'re done.');
+    render();
+  }
+
+  // ---------- pointer: pan, select, move, resize, pinch ----------
+  const pointers = new Map();
+  let act = null; // {mode, start, orig, corner, moved}
+  let pinch = null;
+
+  function hitBox(p) {
+    // Smallest box under the finger first, so small plants beat big furniture.
+    let best = -1, area = Infinity;
+    boxes.forEach((b, i) => {
+      if (p.x >= b.x1 && p.x <= b.x2 && p.y >= b.y1 && p.y <= b.y2) {
+        const a = (b.x2 - b.x1) * (b.y2 - b.y1);
+        if (a < area) { area = a; best = i; }
+      }
+    });
+    return best;
+  }
+  stage.addEventListener('pointerdown', (e) => {
+    stage.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: view.s };
+      act = null;
+      return;
+    }
+    const p = toMap(e);
+    act = { start: { x: e.clientX, y: e.clientY }, last: { x: e.clientX, y: e.clientY }, p0: p, moved: false, mode: 'pan' };
+    if (sel >= 0) {
+      const b = boxes[sel];
+      const hr = 18 / view.s;
+      const corners = [['x1', 'y1', b.x1, b.y1], ['x2', 'y1', b.x2, b.y1], ['x1', 'y2', b.x1, b.y2], ['x2', 'y2', b.x2, b.y2]];
+      const c = corners.find(([, , cx, cy]) => Math.hypot(p.x - cx, p.y - cy) <= hr);
+      if (c) Object.assign(act, { mode: 'resize', kx: c[0], ky: c[1], orig: { ...b } });
+      else if (p.x >= b.x1 && p.x <= b.x2 && p.y >= b.y1 && p.y <= b.y2) Object.assign(act, { mode: 'move', orig: { ...b } });
+    }
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const r = stage.getBoundingClientRect();
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      zoom((pinch.s * (d / pinch.d)) / view.s, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+      return;
+    }
+    if (!act) return;
+    if (!act.moved && Math.hypot(e.clientX - act.start.x, e.clientY - act.start.y) < 6) return;
+    act.moved = true;
+    if (act.mode === 'pan') {
+      view.x += e.clientX - act.last.x;
+      view.y += e.clientY - act.last.y;
+      act.last = { x: e.clientX, y: e.clientY };
+      apply();
+      return;
+    }
+    const p = toMap(e);
+    const dx = Math.round(p.x - act.p0.x), dy = Math.round(p.y - act.p0.y);
+    const b = boxes[sel], o = act.orig;
+    if (act.mode === 'move') {
+      const w = o.x2 - o.x1, h = o.y2 - o.y1;
+      b.x1 = Math.max(0, Math.min(MAP_W - w, o.x1 + dx)); b.x2 = b.x1 + w;
+      b.y1 = Math.max(0, Math.min(MAP_H - h, o.y1 + dy)); b.y2 = b.y1 + h;
+    } else {
+      b[act.kx] = Math.round(Math.max(0, Math.min(MAP_W, o[act.kx] + dx)));
+      b[act.ky] = Math.round(Math.max(0, Math.min(MAP_H, o[act.ky] + dy)));
+    }
+    dirty = true;
+    render();
+  });
+  function endPointer(e) {
+    pointers.delete(e.pointerId);
+    if (pinch) {
+      if (pointers.size < 2) pinch = null;
+      act = null;
+      return;
+    }
+    if (!act) return;
+    if (!act.moved) {
+      sel = hitBox(act.p0);
+      render();
+    } else if (act.mode !== 'pan') {
+      // Tidy a resized box: corners may have crossed.
+      const b = boxes[sel];
+      const [x1, x2] = [Math.min(b.x1, b.x2), Math.max(b.x1, b.x2)];
+      const [y1, y2] = [Math.min(b.y1, b.y2), Math.max(b.y1, b.y2)];
+      Object.assign(b, { x1, y1, x2: Math.max(x2, x1 + MIN), y2: Math.max(y2, y1 + MIN) });
+      changed();
+    }
+    act = null;
+  }
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+
+  // ---------- buttons ----------
+  $('zoomIn').onclick = () => zoom(1.4);
+  $('zoomOut').onclick = () => zoom(1 / 1.4);
+  $('addBtn').onclick = () => {
+    const r = stage.getBoundingClientRect();
+    const cx = Math.round((r.width / 2 - view.x) / view.s), cy = Math.round((r.height / 2 - view.y) / view.s);
+    boxes.push({ name: 'new box', x1: cx - 30, y1: cy - 30, x2: cx + 30, y2: cy + 30 });
+    sel = boxes.length - 1;
+    changed();
+  };
+  $('deleteBtn').onclick = () => {
+    if (sel < 0) return;
+    const btn = $('deleteBtn');
+    if (!btn.dataset.armed) {
+      btn.dataset.armed = '1';
+      btn.textContent = 'Tap again to delete';
+      setTimeout(() => { delete btn.dataset.armed; btn.textContent = 'Delete box'; }, 3000);
+      return;
+    }
+    delete btn.dataset.armed;
+    btn.textContent = 'Delete box';
+    boxes.splice(sel, 1);
+    sel = -1;
+    changed();
+  };
+  $('nameInput').addEventListener('input', () => {
+    if (sel < 0) return;
+    boxes[sel].name = $('nameInput').value.slice(0, 40) || 'box';
+    changed();
+  });
+  $('copyBtn').onclick = async () => {
+    const text = JSON.stringify({ boxes }, null, 1);
+    try {
+      await navigator.clipboard.writeText(text);
+      note('Copied. Paste it to Claude in the chat.');
+    } catch {
+      note('Couldn\'t copy here. Tap Save instead and tell Claude you\'re done.');
+    }
+  };
+  $('saveBtn').onclick = async () => {
+    if (!docRef || saving) return;
+    saving = true;
+    renderPanel();
+    try {
+      await docRef.set({ boxes: boxes.map((b) => ({ ...b })), savedAt: Date.now() });
+      dirty = false;
+      note('Saved. Tell Claude in the chat and the game will use these boxes.');
+    } catch (err) {
+      note(err && err.code === 'not_granted' ? 'You can look but not save here. Use Copy as text instead.' : 'Couldn\'t save just now. Try again in a moment.');
+    } finally {
+      saving = false;
+      renderPanel();
+    }
+  };
+
+  addEventListener('resize', () => apply());
+  fit();
+  render();
+
+  // ---------- shared store ----------
+  (async () => {
+    const db = window.claude ? await window.claude.use('db') : null;
+    if (!db) {
+      note('Sign in to claude.ai to load the house\'s boxes and save changes.');
+      return;
+    }
+    docRef = db.doc('boundaries/house');
+    docRef.onSnapshot(
+      (snap) => {
+        if (dirty) return; // don't throw away edits in progress
+        const data = snap.exists ? snap.data() : null;
+        const list = data && Array.isArray(data.boxes) ? data.boxes : [];
+        boxes = list.map((b) => ({ name: String(b.name || 'box'), x1: +b.x1, y1: +b.y1, x2: +b.x2, y2: +b.y2 }));
+        if (sel >= boxes.length) sel = -1;
+        note(boxes.length ? `${boxes.length} boxes. Tap one to change it.` : 'No boxes yet. Tap ＋ Box to add the first one.');
+        render();
+      },
+      () => note('Lost the connection to saved boxes. Reload the page.'),
+    );
+  })();
+})();
+</script>
