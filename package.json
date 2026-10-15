@@ -1,0 +1,22 @@
+{
+  "name": "cozy-vibes",
+  "version": "0.1.0",
+  "description": "A cozy multiplayer house you can hang out in from any browser.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "node --check server.js && node test/collision.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.0"
+  }
+}
