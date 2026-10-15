@@ -1,5 +1,5 @@
 import { MAP_W, MAP_H, isWalkable, moveWithCollision, findPath, roomAt } from './map.js';
-import { LOOKS, SPRITE_W, SPRITE_H, FEET_Y, getFrame, portrait } from './characters.js';
+import { LOOKS, CHAR_H, loadCharacters, charWidth, drawCharacter, drawPortrait } from './characters.js';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -41,7 +41,7 @@ let profile = loadProfile();
 function loadProfile() {
   try {
     const p = JSON.parse(localStorage.getItem('cozy-profile') || '{}');
-    return { name: p.name || '', look: Number.isInteger(p.look) ? p.look : Math.floor(Math.random() * LOOKS.length) };
+    return { name: p.name || '', look: Number.isInteger(p.look) ? p.look : Math.floor(Math.random() * 2) };
   } catch {
     return { name: '', look: 0 };
   }
@@ -61,11 +61,9 @@ function lookButton(i, selected, onPick) {
   b.type = 'button';
   b.className = 'look' + (selected ? ' selected' : '');
   const c = document.createElement('canvas');
-  c.width = SPRITE_W;
-  c.height = SPRITE_H;
-  const g = c.getContext('2d');
-  g.imageSmoothingEnabled = false;
-  g.drawImage(portrait(i), 0, 0);
+  c.width = 88;
+  c.height = 140;
+  drawPortrait(c, i);
   const label = document.createElement('span');
   label.textContent = LOOKS[i].name;
   b.append(c, label);
@@ -397,10 +395,7 @@ function openMenu(id, screenX, screenY) {
   menuTarget = id;
   const isMe = id === state.myId;
   const menu = $('actionMenu');
-  const pc = $('menuPortrait').getContext('2d');
-  pc.imageSmoothingEnabled = false;
-  pc.clearRect(0, 0, 32, 64);
-  pc.drawImage(portrait(p.look), 0, 0);
+  drawPortrait($('menuPortrait'), p.look);
   $('menuName').textContent = isMe ? `${p.name} (you)` : p.name;
   $('menuSub').textContent = isMe ? 'What do you want to do?' : `In the ${roomAt(p.x, p.y)}`;
 
@@ -545,9 +540,10 @@ function pickPlayer(wx, wy) {
   const list = [...state.players.values()].sort((a, b) => b.y - a.y);
   const pad = 8 / view.zoom;
   for (const p of list) {
-    const left = p.x - SPRITE_W / 2 - pad;
-    const right = p.x + SPRITE_W / 2 + pad;
-    const top = p.y - FEET_Y + 4 - pad;
+    const half = charWidth(p.look) / 2;
+    const left = p.x - half - pad;
+    const right = p.x + half + pad;
+    const top = p.y - CHAR_H - pad;
     const bottom = p.y + 6 + pad;
     if (wx >= left && wx <= right && wy >= top && wy <= bottom) return p;
   }
@@ -803,11 +799,6 @@ function render(now) {
 function drawPlayer(p, now) {
   const mine = p.id === state.myId;
   const moving = p.moving && p.pose === 'stand';
-  let frame = 0;
-  if (moving) frame = [1, 0, 3, 0][Math.floor(now / 150 + p.animT) % 4];
-  if (p.pose === 'dance') frame = Math.floor(now / 220) % 4;
-  let dir = p.dir;
-  if (p.pose === 'dance') dir = ['down', 'left', 'down', 'right'][Math.floor(now / 440) % 4];
 
   let sx = p.x;
   if (now < p.shakeUntil) sx += Math.sin(now / 25) * 2;
@@ -815,24 +806,23 @@ function drawPlayer(p, now) {
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.beginPath();
-  ctx.ellipse(p.x, p.y, 11, 4.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(p.x, p.y, p.pose === 'sleep' ? 30 : 13, 5, 0, 0, Math.PI * 2);
   ctx.fill();
 
   if (mine) {
     ctx.strokeStyle = 'rgba(255, 230, 150, 0.9)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.ellipse(p.x, p.y, 15, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(p.x, p.y, p.pose === 'sleep' ? 34 : 17, 7, 0, 0, Math.PI * 2);
     ctx.stroke();
   }
 
-  const img = getFrame(p.look, dir, frame, p.pose);
-  ctx.drawImage(img, Math.round(sx - SPRITE_W / 2), Math.round(p.y - FEET_Y));
+  drawCharacter(ctx, p.look, sx, p.y, p.dir, moving, p.pose, now, p.animT);
 }
 
 function drawLabels(p, now) {
   const mine = p.id === state.myId;
-  const head = worldToScreen(p.x, p.y - FEET_Y + 2);
+  const head = worldToScreen(p.x, p.y - (p.pose === 'sleep' ? 30 : p.pose === 'sit' ? CHAR_H * 0.84 : CHAR_H) - 2);
   const fs = Math.max(11, Math.min(14, 12 * view.zoom));
   ctx.font = `700 ${fs}px ui-rounded, Nunito, system-ui, sans-serif`;
   ctx.textAlign = 'center';
@@ -909,7 +899,7 @@ function drawEffects(now) {
   for (const e of state.effects) {
     const t = (now - e.t0) / DUR;
     const p = state.players.get(e.playerId);
-    let wx = p.x, wy = p.y - FEET_Y - 10;
+    let wx = p.x, wy = p.y - CHAR_H - 10;
     const other = state.players.get(e.flyTo ?? e.midTo);
     if (other && e.flyTo != null) {
       wx = p.x + (other.x - p.x) * t;
@@ -958,5 +948,8 @@ function loop(now) {
 // Debug hook for automated tests.
 window.__cozy = { state, me, walkTo, view };
 
-initJoin();
-requestAnimationFrame(loop);
+loadCharacters().then(() => {
+  profile.look = ((profile.look % LOOKS.length) + LOOKS.length) % LOOKS.length;
+  initJoin();
+  requestAnimationFrame(loop);
+});

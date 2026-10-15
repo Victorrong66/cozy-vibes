@@ -1,0 +1,16 @@
+{
+  "id": "boy",
+  "name": "Boy",
+  "image": "assets/characters/boy.png",
+  "cellW": 88,
+  "cellH": 161,
+  "footX": 44,
+  "footY": 159,
+  "rows": [
+    "down",
+    "up",
+    "left",
+    "right"
+  ],
+  "frames": 7
+}

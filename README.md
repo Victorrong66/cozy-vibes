@@ -45,7 +45,7 @@ listens on `$PORT`.
 | --- | --- |
 | `server.js` | Serves the game and relays players between everyone in a house over WebSockets. It also rejects positions inside walls. |
 | `public/js/map.js` | The floor plan: walkable areas, doors, blockers, collision and pathfinding. The server and browser share it. |
-| `public/js/characters.js` | Character art. Right now these are placeholder pixel characters drawn in code. |
+| `public/js/characters.js` | Loads the character sprite sheets and draws the walk, sit, nap and dance animations. |
 | `public/js/game.js` | Rendering, controls, camera, action menu, chat, emotes. |
 | `public/assets/house.png` | The house map. |
 
@@ -55,9 +55,20 @@ Coordinates are in pixels of `house.png` (1536×1024). Edit `AREAS` in `map.js` 
 where people can stand, or add to `BLOCKERS` for solid furniture. Then run
 `npm run check`.
 
-### Adding real character animations
+### Characters
 
-`getFrame(look, dir, frame, pose)` in `characters.js` is the only thing the game asks for.
-It takes `dir` (`down`, `up`, `left`, `right`), `frame` (0 = idle, 1–3 = walk cycle) and
-`pose` (`stand`, `sit`, `sleep`, `dance`). To use real sprite sheets, have it return the
-matching image frame instead of the drawn one.
+The boy and girl come from `art/characters-sheet.png`.
+`tools/extract_sprites.py` cuts the frames out, removes the gray background and
+shadow, and lines every frame up on the character's feet. It writes
+`public/assets/characters/<id>.png` (one row per direction, one column per frame) plus
+a `.json` file with the frame size. If you edit the sheet, re-run it:
+
+```bash
+pip install pillow numpy
+python3 tools/extract_sprites.py
+```
+
+To add another character, add its frames to the sheet (or a new one), add an entry to
+`CHARACTERS` in the script, and add its id to `IDS` in `public/js/characters.js`.
+Frame 0 is the standing pose and the rest is the walk cycle. Sitting, napping and
+dancing are made from those same frames.
