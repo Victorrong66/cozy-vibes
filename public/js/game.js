@@ -1,6 +1,7 @@
 import { MAP_W, MAP_H, FURNITURE, isWalkable, moveWithCollision, findPath, roomAt, furnitureAt } from './map.js';
 import { LOOKS, CHAR_H, loadCharacters, charWidth, drawCharacter, drawPortrait } from './characters.js';
 import { CAT_H, loadCats, drawCat, drawCatPortrait } from './cats.js';
+import { ROLE_INFO } from './roles.js';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -177,6 +178,7 @@ function makePlayer(p) {
     dir: p.dir || 'down',
     moving: !!p.moving,
     pose: p.pose || 'stand',
+    npc: p.npc || null, // a housemate's role, or null for real people
     animT: Math.random() * 10,
     bubble: null,
     shakeUntil: 0,
@@ -224,12 +226,12 @@ function onMessage(msg) {
       break;
     case 'join':
       state.players.set(msg.player.id, makePlayer(msg.player));
-      toast(`${msg.player.name} came over 🏡`);
+      if (!msg.quiet) toast(`${msg.player.name} came over 🏡`);
       updateCount();
       break;
     case 'leave': {
       const p = state.players.get(msg.id);
-      if (p) toast(`${p.name} went home 👋`);
+      if (p && !msg.quiet) toast(`${p.name} went home 👋`);
       state.players.delete(msg.id);
       if (me.follow === msg.id) me.follow = null;
       if (me.pending && me.pending.target === msg.id) me.pending = null;
@@ -320,7 +322,9 @@ function updateCat([id, x, y, flip, anim, n]) {
 const CAT_NAMES = { tabby: 'Biscuit', black: 'Pepper' };
 
 function updateCount() {
-  $('playerCount').textContent = state.players.size;
+  $('playerCount').textContent = [...state.players.values()].filter((p) => !p.npc).length;
+  const npcs = [...state.players.values()].filter((p) => p.npc).length;
+  $('npcCount').textContent = npcs ? `${npcs} of 6 added so far.` : '';
 }
 
 let lastSent = '';
@@ -491,7 +495,12 @@ function openMenu(id, screenX, screenY) {
   const menu = $('actionMenu');
   drawPortrait($('menuPortrait'), p.look);
   $('menuName').textContent = isMe ? `${p.name} (you)` : p.name;
-  $('menuSub').textContent = isMe ? 'What do you want to do?' : `In the ${roomAt(p.x, p.y)}`;
+  const where = roomAt(p.x, p.y) === 'doorway' ? 'in a doorway' : `in the ${roomAt(p.x, p.y)}`;
+  $('menuSub').textContent = isMe
+    ? 'What do you want to do?'
+    : p.npc
+      ? `${ROLE_INFO[p.npc]?.emoji} ${ROLE_INFO[p.npc]?.title} · ${where}`
+      : where[0].toUpperCase() + where.slice(1);
 
   const box = $('menuButtons');
   box.innerHTML = '';
@@ -547,6 +556,7 @@ function openMenu(id, screenX, screenY) {
     if (me.follow === id) add('🛑 Stop following', () => doAction(id, 'unfollow'), 'wide');
     else add('👣 Follow', () => doAction(id, 'follow'), 'wide');
     add('🚶 Walk over', () => walkTo(p.x, p.y + 20), 'wide');
+    if (p.npc) add('🏠 Send home', () => send({ t: 'removeNpc', id: p.id }), 'wide');
   }
 
   placeMenu(screenX, screenY);
@@ -720,6 +730,7 @@ addEventListener('keydown', (e) => {
   } else if (k === 'escape') {
     closeMenu();
     closeSaves();
+    closeAdd();
     $('emoteTray').classList.add('hidden');
   }
 });
@@ -915,6 +926,62 @@ for (const e of EMOTES) {
   });
   $('emoteTray').append(b);
 }
+
+// ---------------------------------------------------------------------------
+// Add a housemate
+// ---------------------------------------------------------------------------
+
+const addChoice = { role: 'animator', look: 0 };
+
+function openAdd() {
+  closeMenu();
+  closeSaves();
+  releaseJoy();
+  const roles = $('roleList');
+  roles.innerHTML = '';
+  for (const [key, r] of Object.entries(ROLE_INFO)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'role' + (key === addChoice.role ? ' selected' : '');
+    for (const [cls, text] of [['role-emoji', r.emoji], ['role-title', r.title], ['role-about', r.about]]) {
+      const el = document.createElement('span');
+      el.className = cls;
+      el.textContent = text;
+      b.append(el);
+    }
+    b.addEventListener('click', () => {
+      addChoice.role = key;
+      roles.querySelectorAll('.role').forEach((el) => el.classList.remove('selected'));
+      b.classList.add('selected');
+    });
+    roles.append(b);
+  }
+  const looks = $('npcLooks');
+  looks.innerHTML = '';
+  LOOKS.forEach((_, i) =>
+    looks.append(
+      lookButton(i, i === addChoice.look, (idx, btn) => {
+        addChoice.look = idx;
+        looks.querySelectorAll('.look').forEach((el) => el.classList.remove('selected'));
+        btn.classList.add('selected');
+      })
+    )
+  );
+  updateCount();
+  $('addPanel').classList.remove('hidden');
+}
+function closeAdd() {
+  $('addPanel').classList.add('hidden');
+}
+
+$('addBtn').addEventListener('click', openAdd);
+$('addClose').addEventListener('click', closeAdd);
+$('addPanel').addEventListener('click', (e) => e.target === $('addPanel') && closeAdd());
+$('addNpcBtn').addEventListener('click', () => {
+  send({ t: 'addNpc', role: addChoice.role, look: addChoice.look, name: $('npcName').value.trim() });
+  $('npcName').value = '';
+  closeAdd();
+});
 
 // ---------------------------------------------------------------------------
 // Save files
@@ -1264,7 +1331,7 @@ function drawLabels(p, now) {
   ctx.font = `700 ${fs}px ui-rounded, Nunito, system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  const label = p.name + (me.follow === p.id ? ' 👣' : '');
+  const label = (p.npc ? `${ROLE_INFO[p.npc]?.emoji || ''} ` : '') + p.name + (me.follow === p.id ? ' 👣' : '');
   const w = ctx.measureText(label).width + 10;
   ctx.fillStyle = mine ? 'rgba(227,163,59,0.92)' : 'rgba(42,26,18,0.72)';
   roundRect(head.x - w / 2, head.y - fs - 6, w, fs + 5, 6);

@@ -21,6 +21,13 @@ on phones and laptops alike.
   They wander, nap on the bed, cushion, beanbag or hallway rug, play with yarn and come
   hang out by people. Everyone in a house sees the same cats. Tap one to pet it, play
   with it, tease it (it swats and runs off) or call it over.
+- **Housemates:** tap **🙋 Add** to invite a computer-controlled housemate: an
+  animator (works at the desk), chef (dining table), gamer (couch), sleepy roommate
+  (bed), plant lover (waters the plants) or bookworm (bookshelves and couch). Pick
+  how they look and, if you like, their name. They do their own thing, react when you
+  wave, hug or poke them, and sometimes join in when you chat. Tap one and choose
+  **Send home** to remove them. Up to 6 per house. Everyone sees the same ones, and
+  they're remembered with the house and in saves.
 - **Coming back:** each house remembers where everyone was, including who was in
   bed or on the couch, plus the cats. Come back with the same house code on the same
   phone or laptop and you're right where you left off.
@@ -80,6 +87,7 @@ npm run deploy
 | --- | --- |
 | `src/room.js` | The multiplayer server logic for one house: joining, movement, actions, chat. It rejects positions inside walls. |
 | `src/cats.js` | The two house cats: what they decide to do and how they react to people. |
+| `src/npcs.js` | Housemates: each role's routine, lines and reactions. Role names and descriptions are in `public/js/roles.js`. |
 
 Where houses are stored: on Cloudflare, in each house's Durable Object storage. With
 `npm start`, in `data/<house code>.json` (set `DATA_DIR` to put them elsewhere). In the

@@ -9,10 +9,12 @@
 // saved data is:
 //   players: token -> { name, look, x, y, dir, pose, seen }   where everyone was
 //   cats:    the cats' positions and naps
+//   npcs:    the computer-controlled housemates people added
 //   saves:   up to MAX_SAVES named snapshots people can go back to
 
 import { SPAWN, isWalkable, isValidSpot } from '../public/js/map.js';
 import { Cats } from './cats.js';
+import { Npcs, ROLES, MAX_NPCS } from './npcs.js';
 
 export const MAX_PLAYERS = 16;
 export const MAX_SAVES = 10;
@@ -49,7 +51,9 @@ function cleanToken(v) {
 }
 
 function publicPlayer(p) {
-  return { id: p.id, name: p.name, look: p.look, x: p.x, y: p.y, dir: p.dir, moving: p.moving, pose: p.pose };
+  const out = { id: p.id, name: p.name, look: p.look, x: p.x, y: p.y, dir: p.dir, moving: p.moving, pose: p.pose };
+  if (p.npc) out.npc = p.npc; // a housemate's role
+  return out;
 }
 
 // Where a player is, in the shape a house remembers it.
@@ -60,7 +64,9 @@ function spotOf(p) {
 
 // What the save list shows (never includes anyone's token).
 function saveSummary(s) {
-  return { id: s.id, name: s.name, at: s.at, by: s.by, who: Object.values(s.players).map((p) => p.name) };
+  const who = Object.values(s.players).map((p) => p.name);
+  for (const n of s.npcs || []) who.push(`${ROLES[n.role]?.emoji || ''} ${n.name}`.trim());
+  return { id: s.id, name: s.name, at: s.at, by: s.by, who };
 }
 
 const memoryStore = () => {
@@ -77,7 +83,14 @@ export class Room {
     this.onEmpty = onEmpty;
     this.cats = new Cats();
     this.store = store;
-    this.memory = { players: {}, cats: null, saves: [] };
+    this.npcs = new Npcs({
+      nextId: () => this.nextId++,
+      others: (self) => [...this.players.values(), ...this.npcs.list.values()].filter((p) => p !== self),
+      say: (npc, text) => this.broadcast({ t: 'chat', from: npc.id, text }),
+      emote: (npc, emoji) => this.broadcast({ t: 'emote', from: npc.id, emoji }),
+      act: (npc, to, action) => this.players.has(to) && this.broadcast({ t: 'action', from: npc.id, to, action }),
+    });
+    this.memory = { players: {}, cats: null, npcs: [], saves: [] };
     this.persistTimer = null;
     this.ready = this.loadMemory();
   }
@@ -89,6 +102,7 @@ export class Room {
         this.memory.players = data.players && typeof data.players === 'object' ? data.players : {};
         this.memory.saves = Array.isArray(data.saves) ? data.saves.slice(-MAX_SAVES) : [];
         if (data.cats) this.cats.restore(data.cats);
+        if (data.npcs) this.npcs.restore(data.npcs);
       }
     } catch (err) {
       console.error(`Couldn't load house "${this.code}":`, err);
@@ -115,6 +129,7 @@ export class Room {
       this.memory.players = Object.fromEntries(known.slice(0, MAX_REMEMBERED));
     }
     this.memory.cats = this.cats.serialize();
+    this.memory.npcs = this.npcs.serialize();
     try {
       await this.store.save(this.memory);
     } catch (err) {
@@ -183,7 +198,7 @@ export class Room {
       id: player.id,
       room: this.code,
       back: !!back,
-      players: [...this.players.values()].map(publicPlayer),
+      players: [...this.players.values(), ...this.npcs.list.values()].map(publicPlayer),
       cats: this.cats.snapshot(),
     });
     this.broadcast({ t: 'join', player: publicPlayer(player) }, player.id);
@@ -195,7 +210,7 @@ export class Room {
   placeAt(player, spot) {
     const x = Number(spot.x), y = Number(spot.y);
     if (!Number.isFinite(x) || !Number.isFinite(y) || !isValidSpot(x, y)) return false;
-    for (const other of this.players.values()) {
+    for (const other of [...this.players.values(), ...this.npcs.list.values()]) {
       if (other !== player && Math.hypot(other.x - x, other.y - y) < 4) return false;
     }
     player.x = x;
@@ -227,9 +242,11 @@ export class Room {
       }
       case 'action': {
         if (!ACTIONS.has(msg.action)) return;
-        const target = this.players.get(Number(msg.target));
+        const id = Number(msg.target);
+        const target = this.players.get(id) || this.npcs.list.get(id);
         if (!target || target.id === player.id) return;
         this.broadcast({ t: 'action', from: player.id, to: target.id, action: msg.action });
+        if (target.npc) this.npcs.react(target, player, msg.action);
         break;
       }
       case 'emote':
@@ -241,6 +258,7 @@ export class Room {
         if (!text || now - player.lastChat < 700) return;
         player.lastChat = now;
         this.broadcast({ t: 'chat', from: player.id, text });
+        this.npcs.hearChat(player);
         break;
       }
       case 'cat': {
@@ -260,6 +278,15 @@ export class Room {
       case 'saves':
         this.sendTo(player, { t: 'saves', list: this.memory.saves.map(saveSummary) });
         break;
+      case 'addNpc':
+      case 'removeNpc': {
+        const now = Date.now();
+        if (now - (player.lastNpcAction || 0) < 250) return;
+        player.lastNpcAction = now;
+        if (msg.t === 'addNpc') this.addNpc(player, msg);
+        else this.removeNpc(player, Number(msg.id));
+        break;
+      }
       case 'save':
       case 'load':
       case 'deleteSave': {
@@ -272,6 +299,27 @@ export class Room {
         break;
       }
     }
+  }
+
+  // ---- Housemates ----
+
+  addNpc(player, msg) {
+    if (!ROLES[msg.role]) return;
+    if (this.npcs.size >= MAX_NPCS) {
+      return this.sendTo(player, { t: 'notice', text: `The house is full of housemates (${MAX_NPCS} max). Send one home first.` });
+    }
+    const npc = this.npcs.add(msg.role, cleanLook(msg.look, 0), clean(msg.name, 16));
+    this.broadcast({ t: 'join', player: publicPlayer(npc), quiet: true });
+    this.broadcast({ t: 'notice', text: `${ROLES[npc.npc].emoji} ${player.name} invited ${npc.name} the ${ROLES[npc.npc].title.toLowerCase()} over` });
+    this.persist(true);
+  }
+
+  removeNpc(player, id) {
+    const npc = this.npcs.remove(id);
+    if (!npc) return;
+    this.broadcast({ t: 'leave', id: npc.id, quiet: true });
+    this.broadcast({ t: 'notice', text: `👋 ${npc.name} headed home` });
+    this.persist(true);
   }
 
   // ---- Save files ----
@@ -287,6 +335,7 @@ export class Room {
       by: player.name,
       players,
       cats: this.cats.serialize(),
+      npcs: this.npcs.serialize(),
     };
     this.memory.saves.push(save);
     if (this.memory.saves.length > MAX_SAVES) this.memory.saves.shift();
@@ -310,6 +359,11 @@ export class Room {
       }
     }
     this.cats.restore(save.cats);
+    if (save.npcs) {
+      const [removed, added] = this.npcs.restore(save.npcs);
+      for (const n of removed) this.broadcast({ t: 'leave', id: n.id, quiet: true });
+      for (const n of added) this.broadcast({ t: 'join', player: publicPlayer(n), quiet: true });
+    }
     this.persist(true);
     this.broadcast({ t: 'notice', text: `📂 ${player.name} loaded "${save.name}"` });
   }
@@ -351,6 +405,14 @@ export class Room {
       if (p.dirty) {
         changed.push([p.id, p.x, p.y, p.dir, p.moving ? 1 : 0, p.pose]);
         p.dirty = false;
+      }
+    }
+    const dtNpc = Math.min(250, now - (this.lastTick || now - TICK_MS));
+    this.npcs.update(dtNpc, this.players.size > 0);
+    for (const n of this.npcs.list.values()) {
+      if (n.dirty) {
+        changed.push([n.id, Math.round(n.x * 10) / 10, Math.round(n.y * 10) / 10, n.dir, n.moving ? 1 : 0, n.pose]);
+        n.dirty = false;
       }
     }
     if (changed.length) this.broadcast({ t: 's', p: changed });
