@@ -69,6 +69,11 @@ house (that's what keeps everyone in a house connected), plus the game files as 
 assets. Plain Cloudflare *Pages* won't work, because it can't hold the live connections.
 Everything fits in Cloudflare's free plan.
 
+**GitHub Actions (what this repo uses):** `.github/workflows/deploy.yml` runs the tests and
+then `wrangler deploy` on every push to `main` (or from the Actions tab with **Run
+workflow**). It needs two repository secrets, under Settings → Secrets and variables →
+Actions: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+
 **Option A: connect the GitHub repo (deploys on every push)**
 1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Import a repository**.
 2. Pick this repo. Use `npm install` as the build command and `npx wrangler deploy` as
