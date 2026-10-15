@@ -10,6 +10,10 @@ on phones and laptops alike.
 - **Interact:** tap any character to open their action menu: wave, high five, hug,
   send love, poke, dance together, follow, or walk over. Hugs, high fives, pokes and
   dances walk you over to the other person first.
+- **Furniture:** tap the bed, couch or desk to use it. You get into bed from either side
+  where the green blanket meets the white sheet, onto the couch only from the coffee
+  table side, and into the desk chair from the front. Move again to get up. The bed,
+  couch, desk, TV, coffee table and dining table are solid otherwise.
 - **Yourself:** tap your own character to sit, nap, dance, emote or change your look.
 - **Chat:** type in the box at the bottom (or press Enter on a keyboard). Messages
   show up as speech bubbles.
@@ -72,7 +76,7 @@ npm run deploy
 ### Changing walls and doors
 
 Coordinates are in pixels of `house.png` (1536×1024). Edit `AREAS` in `map.js` to change
-where people can stand, or add to `BLOCKERS` for solid furniture. Then run
+where people can stand, add to `BLOCKERS` for solid furniture, or add to `FURNITURE` for things you can sit or lie on (each seat has an entry point that decides which side you get on from). Then run
 `npm run check`.
 
 ### Characters

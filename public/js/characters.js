@@ -34,10 +34,12 @@ export function charWidth(index) {
 }
 
 const WALK_MS = 105;
+// How far above the feet the blanket starts when someone's in bed.
+export const BED_TUCK = 36;
 
 /**
  * Draw a character with its feet at (x, y).
- * pose: stand | sit | sleep | dance ; dir: down | up | left | right
+ * pose: stand | sit | sleep | dance | bed ; dir: down | up | left | right
  */
 export function drawCharacter(ctx, index, x, y, dir, moving, pose, now, phase = 0) {
   const look = lookOf(index);
@@ -51,7 +53,7 @@ export function drawCharacter(ctx, index, x, y, dir, moving, pose, now, phase = 
   } else if (moving) {
     frame = Math.floor(now / WALK_MS + phase) % walkFrames;
   }
-  if (pose === 'sit' || pose === 'sleep') dir = 'down';
+  if (pose === 'sleep' || pose === 'bed') dir = 'down';
 
   const row = Math.max(0, meta.rows.indexOf(dir));
   const sx = frame * meta.cellW;
@@ -62,6 +64,12 @@ export function drawCharacter(ctx, index, x, y, dir, moving, pose, now, phase = 
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
+  if (pose === 'bed') {
+    // Tucked in: only the head and shoulders show above the blanket.
+    ctx.beginPath();
+    ctx.rect(x - 60, y - CHAR_H - 20, 120, CHAR_H + 20 - BED_TUCK);
+    ctx.clip();
+  }
   ctx.translate(x, y);
   if (pose === 'dance') ctx.translate(0, -Math.abs(Math.sin(now / 210)) * 3);
   if (pose === 'sit') ctx.scale(1, 0.84); // a little crouch

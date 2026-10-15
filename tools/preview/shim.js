@@ -3,7 +3,7 @@
 // to tap on. Must be imported before game.js.
 
 import { Room } from '../../src/room.js';
-import { AREAS, isWalkable, findPath, moveWithCollision } from '../../public/js/map.js';
+import { AREAS, FURNITURE, isWalkable, findPath, moveWithCollision } from '../../public/js/map.js';
 import { HOUSE_SRC, CHARACTER_META } from './assets.gen.js';
 
 window.COZY_HOUSE_SRC = HOUSE_SRC;
@@ -102,7 +102,16 @@ const CHAT_REPLIES = ['haha', 'same!', 'omg yes', 'true true', '😂', 'love tha
 
 function startBot(name, look, startDelay) {
   const sock = openPair();
-  const bot = { id: null, x: 0, y: 0, dir: 'down', pose: 'stand', path: null, waitUntil: 0, danceUntil: 0 };
+  const bot = { id: null, x: 0, y: 0, dir: 'down', pose: 'stand', path: null, waitUntil: 0, danceUntil: 0, seat: null, goingToSeat: null };
+  const others = new Map(); // id -> [x, y], to see which seats are free
+  const seatFree = (s) => ![...others.values()].some(([x, y]) => Math.hypot(x - s.x, y - s.y) < 4);
+  const leaveSeat = () => {
+    if (!bot.seat) return;
+    bot.x = bot.seat.entry.x;
+    bot.y = bot.seat.entry.y;
+    bot.seat = null;
+    bot.pose = 'stand';
+  };
   const send = (msg) => sock.send(JSON.stringify(msg));
   const say = (text, delay = 700) => setTimeout(() => send({ t: 'chat', text }), delay);
 
@@ -113,13 +122,19 @@ function startBot(name, look, startDelay) {
       const me = msg.players.find((p) => p.id === msg.id);
       bot.x = me.x;
       bot.y = me.y;
+    } else if (msg.t === 's') {
+      for (const [id, x, y] of msg.p) if (id !== bot.id) others.set(id, [x, y]);
+    } else if (msg.t === 'leave') {
+      others.delete(msg.id);
     } else if (msg.t === 'action' && msg.to === bot.id) {
       const r = REPLIES[msg.action];
       if (!r) return;
       bot.path = null;
+      bot.goingToSeat = null;
       bot.waitUntil = performance.now() + 4000;
       if (r.action) setTimeout(() => send({ t: 'action', target: msg.from, action: r.action }), 900);
       if (msg.action === 'dance') {
+        leaveSeat();
         bot.pose = 'dance';
         bot.danceUntil = performance.now() + 5000;
       }
@@ -156,7 +171,21 @@ function startBot(name, look, startDelay) {
         bot.y = n.y;
         bot.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
       }
-      if (bot.path && !bot.path.length) {
+      if (bot.path && !bot.path.length && bot.goingToSeat) {
+        // Arrived at the way onto the furniture.
+        const seat = bot.goingToSeat;
+        bot.goingToSeat = null;
+        bot.path = null;
+        if (seatFree(seat)) {
+          bot.seat = seat;
+          bot.x = seat.x;
+          bot.y = seat.y;
+          bot.dir = seat.dir;
+          bot.pose = FURNITURE.find((f) => f.seats.includes(seat)).pose;
+          bot.waitUntil = now + rand(6000, 14000);
+          if (bot.pose === 'bed') send({ t: 'emote', emoji: '💤' });
+        }
+      } else if (bot.path && !bot.path.length) {
         bot.path = null;
         bot.dir = 'down';
         bot.waitUntil = now + rand(2500, 7000);
@@ -168,6 +197,21 @@ function startBot(name, look, startDelay) {
         else if (r < 0.4) say(pick(IDLE_LINES), 0);
       }
     } else if (now > bot.waitUntil && bot.pose !== 'dance') {
+      leaveSeat();
+      bot.goingToSeat = null;
+      if (Math.random() < 0.35) {
+        // Go use the bed, couch or desk.
+        const seat = pick(FURNITURE.flatMap((f) => f.seats).filter(seatFree));
+        if (seat) {
+          bot.path = findPath(bot.x, bot.y, seat.entry.x, seat.entry.y);
+          if (bot.path) {
+            bot.goingToSeat = seat;
+            bot.pose = 'stand';
+            bot.waitUntil = now + 1500;
+            return send({ t: 'state', x: bot.x, y: bot.y, dir: bot.dir, moving: false, pose: bot.pose });
+          }
+        }
+      }
       const area = pick(ROOMS);
       for (let i = 0; i < 20; i++) {
         const tx = rand(area.x1, area.x2), ty = rand(area.y1, area.y2);

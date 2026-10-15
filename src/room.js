@@ -5,14 +5,14 @@
 // Sockets only need send(), close(), readyState and addEventListener('message' |
 // 'close'), which both the `ws` package and Cloudflare's WebSocket provide.
 
-import { SPAWN, isWalkable } from '../public/js/map.js';
+import { SPAWN, isWalkable, isValidSpot } from '../public/js/map.js';
 
 export const MAX_PLAYERS = 16;
 const TICK_MS = 66; // ~15 movement broadcasts per second
 const IDLE_KICK_MS = 45000; // clients check in at least every 2s while open
 
 const ACTIONS = new Set(['wave', 'highfive', 'hug', 'heart', 'poke', 'dance', 'follow', 'unfollow']);
-const POSES = new Set(['stand', 'sit', 'sleep', 'dance']);
+const POSES = new Set(['stand', 'sit', 'sleep', 'dance', 'bed']);
 const DIRS = new Set(['up', 'down', 'left', 'right']);
 const EMOTES = new Set(['😀', '😂', '😍', '😮', '😢', '😡', '👍', '💤', '🎉', '❤️']);
 const OPEN = 1;
@@ -104,9 +104,9 @@ export class Room {
     switch (msg.t) {
       case 'state': {
         const x = Number(msg.x), y = Number(msg.y);
-        // Only accept positions that are on the floor, so walls stay solid even
-        // for a modified client.
-        if (Number.isFinite(x) && Number.isFinite(y) && isWalkable(x, y)) {
+        // Only accept positions on the floor or in a seat, so walls and furniture
+        // stay solid even for a modified client.
+        if (Number.isFinite(x) && Number.isFinite(y) && isValidSpot(x, y)) {
           player.x = Math.round(x * 10) / 10;
           player.y = Math.round(y * 10) / 10;
         }

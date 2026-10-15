@@ -15,10 +15,61 @@ export const AREAS = [
   { name: 'office', x1: 1012, y1: 476, x2: 1350, y2: 712 },
 ];
 
+// Furniture you can use. Each piece is solid; the only way onto it is a seat,
+// reached by walking to that seat's entry point on the allowed side.
+//   pose: what the character does there; dir: which way they face.
+export const FURNITURE = [
+  {
+    id: 'bed',
+    name: 'bed',
+    rect: { x1: 930, y1: 115, x2: 1086, y2: 318 },
+    pose: 'bed',
+    // Get in from either side where the green blanket meets the white sheet.
+    seats: [
+      { x: 972, y: 236, dir: 'down', entry: { x: 918, y: 208 } },
+      { x: 1043, y: 236, dir: 'down', entry: { x: 1098, y: 208 } },
+    ],
+  },
+  {
+    id: 'couch',
+    name: 'couch',
+    rect: { x1: 512, y1: 398, x2: 612, y2: 632 },
+    pose: 'sit',
+    // Only from the coffee table side.
+    seats: [
+      { x: 553, y: 482, dir: 'left', entry: { x: 496, y: 482 } },
+      { x: 553, y: 566, dir: 'left', entry: { x: 496, y: 566 } },
+    ],
+  },
+  {
+    id: 'desk',
+    name: 'desk',
+    rect: { x1: 1080, y1: 466, x2: 1252, y2: 568 },
+    pose: 'sit',
+    // Pull the chair out from the front.
+    seats: [{ x: 1171, y: 556, dir: 'up', entry: { x: 1171, y: 586 } }],
+  },
+];
+
 // Solid bits that poke into a floor area.
 export const BLOCKERS = [
   { name: 'pillar by the front door', x1: 818, y1: 680, x2: 852, y2: 760 },
+  { name: 'TV', x1: 224, y1: 380, x2: 286, y2: 606 },
+  { name: 'coffee table', x1: 400, y1: 438, x2: 478, y2: 590 },
+  { name: 'dining table', x1: 572, y1: 190, x2: 734, y2: 335 },
+  { name: 'desk chair', x1: 1146, y1: 500, x2: 1198, y2: 568 },
+  { name: 'desk', x1: 1080, y1: 466, x2: 1252, y2: 550 },
+  ...FURNITURE.filter((f) => f.id !== 'desk').map((f) => ({ name: f.name, ...f.rect })),
 ];
+
+// True when someone may stand here: on the floor, or in one of the seats.
+export function isValidSpot(x, y) {
+  return isWalkable(x, y) || FURNITURE.some((f) => f.seats.some((s) => Math.abs(s.x - x) < 1 && Math.abs(s.y - y) < 1));
+}
+
+export function furnitureAt(x, y) {
+  return FURNITURE.find((f) => x >= f.rect.x1 && x <= f.rect.x2 && y >= f.rect.y1 && y <= f.rect.y2) || null;
+}
 
 // Half-width and height of the foot box used for collision.
 export const FOOT_HALF_W = 9;

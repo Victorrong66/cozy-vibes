@@ -1,4 +1,4 @@
-import { MAP_W, MAP_H, isWalkable, moveWithCollision, findPath, roomAt } from './map.js';
+import { MAP_W, MAP_H, FURNITURE, isWalkable, moveWithCollision, findPath, roomAt, furnitureAt } from './map.js';
 import { LOOKS, CHAR_H, loadCharacters, charWidth, drawCharacter, drawPortrait } from './characters.js';
 
 // ---------------------------------------------------------------------------
@@ -32,6 +32,8 @@ const me = {
   pending: null, // { target, action } to do once we reach them
   repathAt: 0,
   danceUntil: 0,
+  seat: null, // the bed / couch / desk seat we're in
+  goingToSeat: null, // the seat we're walking over to
 };
 
 let ws = null;
@@ -167,6 +169,7 @@ function onMessage(msg) {
   switch (msg.t) {
     case 'welcome': {
       const prev = state.players.get(state.myId);
+      me.seat = me.goingToSeat = null;
       state.myId = msg.id;
       state.players.clear();
       for (const p of msg.players) state.players.set(p.id, makePlayer(p));
@@ -342,6 +345,7 @@ function dirToward(a, b) {
 
 function startDancing() {
   const mine = state.players.get(state.myId);
+  leaveSeat();
   me.danceUntil = performance.now() + 5000;
   mine.pose = 'dance';
   sendState(true);
@@ -352,6 +356,8 @@ function doAction(targetId, action) {
   const target = state.players.get(targetId);
   if (!mine || !target) return;
   if (action === 'follow') {
+    leaveSeat();
+    me.goingToSeat = null;
     me.follow = targetId;
     me.pending = null;
     send({ t: 'action', target: targetId, action: 'follow' });
@@ -362,7 +368,7 @@ function doAction(targetId, action) {
     stopFollowing();
     return;
   }
-  if (ACTIONS[action].near && Math.hypot(target.x - mine.x, target.y - mine.y) > NEAR) {
+  if (ACTIONS[action].near && !closeEnough(mine, target)) {
     // Walk over first, then do it.
     me.follow = null;
     me.pending = { target: targetId, action };
@@ -370,6 +376,13 @@ function doAction(targetId, action) {
     return;
   }
   send({ t: 'action', target: targetId, action });
+}
+
+// Close enough to hug or high five. Someone in bed or on the couch can be
+// reached from beside the furniture.
+function closeEnough(a, b) {
+  const d = Math.hypot(b.x - a.x, b.y - a.y);
+  return d <= NEAR || (!isWalkable(b.x, b.y) && d <= 95);
 }
 
 function stopFollowing() {
@@ -471,6 +484,8 @@ function closeMenu() {
 
 function setPose(pose) {
   const mine = state.players.get(state.myId);
+  leaveSeat();
+  me.goingToSeat = null;
   me.path = null;
   stopFollowing();
   me.danceUntil = 0;
@@ -481,6 +496,61 @@ function setPose(pose) {
 
 function emote(e) {
   send({ t: 'emote', emoji: e });
+}
+
+// ---------------------------------------------------------------------------
+// Furniture: walk to a seat's entry point, then sit / lie down
+// ---------------------------------------------------------------------------
+
+const furnitureOf = (seat) => FURNITURE.find((f) => f.seats.includes(seat));
+
+function seatTaken(seat) {
+  for (const p of state.players.values()) {
+    if (p.id !== state.myId && Math.hypot(p.tx - seat.x, p.ty - seat.y) < 4) return true;
+  }
+  return false;
+}
+
+function useFurniture(f) {
+  const mine = state.players.get(state.myId);
+  if (!mine || (me.seat && f.seats.includes(me.seat))) return;
+  const free = f.seats.filter((s) => !seatTaken(s));
+  if (!free.length) {
+    toast(`Someone's already using the ${f.name}`);
+    return;
+  }
+  // The seat whose way in is closest to where we're standing.
+  const near = (s) => Math.hypot(s.entry.x - mine.x, s.entry.y - mine.y);
+  const seat = free.sort((a, b) => near(a) - near(b))[0];
+  me.pending = null;
+  stopFollowing();
+  walkTo(seat.entry.x, seat.entry.y);
+  me.goingToSeat = seat;
+}
+
+function sitIn(seat) {
+  const mine = state.players.get(state.myId);
+  const f = furnitureOf(seat);
+  mine.x = seat.x;
+  mine.y = seat.y;
+  mine.dir = seat.dir;
+  mine.pose = f.pose;
+  me.seat = seat;
+  me.path = null;
+  me.danceUntil = 0;
+  if (f.pose === 'bed') addEffect(state.myId, '💤');
+  sendState(true);
+}
+
+// Get up and step back out the way we came in.
+function leaveSeat() {
+  if (!me.seat) return;
+  const mine = state.players.get(state.myId);
+  mine.x = me.seat.entry.x;
+  mine.y = me.seat.entry.y;
+  mine.pose = 'stand';
+  me.seat = null;
+  sendState(true);
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +599,12 @@ canvas.addEventListener('pointerup', (e) => {
     openMenu(hit.id, e.clientX, e.clientY);
     return;
   }
+  const furniture = furnitureAt(w.x, w.y);
+  if (furniture) {
+    useFurniture(furniture);
+    state.ripples.push({ x: w.x, y: w.y, t0: performance.now(), ok: true });
+    return;
+  }
   me.pending = null;
   stopFollowing();
   walkTo(w.x, w.y);
@@ -553,6 +629,8 @@ function pickPlayer(wx, wy) {
 function walkTo(x, y) {
   const mine = state.players.get(state.myId);
   if (!mine) return;
+  leaveSeat();
+  me.goingToSeat = null;
   me.path = findPath(mine.x, mine.y, x, y);
   if (me.path && mine.pose !== 'stand') {
     mine.pose = 'stand';
@@ -638,6 +716,8 @@ function updateMe(dt, now) {
   if (keys.has('arrowdown') || keys.has('s')) vy += 1;
 
   if (vx || vy) {
+    leaveSeat();
+    me.goingToSeat = null;
     me.path = null;
     me.pending = null;
     stopFollowing();
@@ -656,7 +736,7 @@ function updateMe(dt, now) {
     const t = state.players.get(me.pending.target);
     me.repathAt = now + 400;
     if (!t) me.pending = null;
-    else if (Math.hypot(t.x - mine.x, t.y - mine.y) <= NEAR) {
+    else if (closeEnough(mine, t)) {
       send({ t: 'action', target: t.id, action: me.pending.action });
       me.pending = null;
       me.path = null;
@@ -696,6 +776,13 @@ function updateMe(dt, now) {
     }
   } else {
     mine.moving = false;
+  }
+
+  // Reached the way onto the furniture: get on.
+  if (me.goingToSeat && !(me.path && me.path.length)) {
+    const seat = me.goingToSeat;
+    me.goingToSeat = null;
+    if (Math.hypot(mine.x - seat.entry.x, mine.y - seat.entry.y) < 10 && !seatTaken(seat)) sitIn(seat);
   }
 
   if (mine.pose === 'dance' && me.danceUntil && now > me.danceUntil) {
@@ -804,12 +891,14 @@ function drawPlayer(p, now) {
   if (now < p.shakeUntil) sx += Math.sin(now / 25) * 2;
 
   // Shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.beginPath();
-  ctx.ellipse(p.x, p.y, p.pose === 'sleep' ? 30 : 13, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
+  if (p.pose !== 'bed') {
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, p.pose === 'sleep' ? 30 : 13, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
-  if (mine) {
+  if (mine && p.pose !== 'bed') {
     ctx.strokeStyle = 'rgba(255, 230, 150, 0.9)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -835,7 +924,7 @@ function drawLabels(p, now) {
   ctx.fillStyle = mine ? '#2a1a12' : '#fbf1dc';
   ctx.fillText(label, head.x, head.y - 2);
 
-  if (p.pose === 'sleep') {
+  if (p.pose === 'sleep' || p.pose === 'bed') {
     const t = (now / 1000) % 2;
     ctx.font = `${fs + 2}px sans-serif`;
     ctx.globalAlpha = 1 - t / 2;
