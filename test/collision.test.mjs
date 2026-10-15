@@ -53,13 +53,12 @@ for (const [name, to] of Object.entries({ bedroom, office })) {
 assert.equal(findPath(500, 500, 905, 950)?.some((p) => p.y > 745) ?? false, false, 'cannot walk outside');
 
 // Furniture is solid; you can only get on through each seat's entry point.
-for (const [x, y, what] of [[1005, 260, 'bed'], [560, 520, 'couch'], [1160, 500, 'desk'], [255, 500, 'TV'], [440, 510, 'coffee table'], [650, 260, 'dining table']]) {
+for (const [x, y, what] of [[1005, 260, 'bed'], [590, 520, 'couch back'], [1160, 500, 'desk'], [255, 500, 'TV'], [440, 510, 'coffee table'], [650, 260, 'dining table']]) {
   assert.ok(!isWalkable(x, y), `${what} is solid`);
 }
 for (const f of FURNITURE) {
   for (const seat of f.seats) {
     assert.ok(isWalkable(seat.entry.x, seat.entry.y), `${f.name} entry is on the floor`);
-    assert.ok(!isWalkable(seat.x, seat.y), `${f.name} seat is on the furniture`);
     assert.ok(isValidSpot(seat.x, seat.y), `${f.name} seat is allowed for the server`);
     assert.equal(furnitureAt(seat.x, seat.y), f, `${f.name} seat is inside its tap area`);
     assert.ok(findPath(living.x, living.y, seat.entry.x, seat.entry.y), `${f.name} entry is reachable`);
@@ -70,5 +69,11 @@ assert.ok(FURNITURE.find((f) => f.id === 'bed').seats.every((s) => s.entry.y > 1
 // Couch: only from the coffee table side (left of the couch).
 assert.ok(FURNITURE.find((f) => f.id === 'couch').seats.every((s) => s.entry.x < 512 && s.entry.x > 478));
 assert.ok(!isValidSpot(700, 700.5) || isWalkable(700, 700.5));
+
+// Couch cushions: open from the coffee table side only (back and arms are solid).
+assert.ok(moveWithCollision(640, 500, -80, 0).x > 600, 'blocked by the couch back');
+assert.ok(moveWithCollision(550, 380, 0, 80).y < 410, 'blocked by the top arm');
+assert.ok(moveWithCollision(550, 645, 0, -80).y > 615, 'blocked by the bottom arm');
+assert.ok(moveWithCollision(490, 500, 60, 0).x > 540, 'cushions reachable from the coffee table side');
 
 console.log('collision tests passed');

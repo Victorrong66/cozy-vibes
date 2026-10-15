@@ -1,4 +1,4 @@
-import { MAP_W, MAP_H, FURNITURE, isWalkable, moveWithCollision, findPath, roomAt, furnitureAt } from './map.js';
+import { MAP_W, MAP_H, FURNITURE, seatAt, isWalkable, moveWithCollision, findPath, roomAt, furnitureAt } from './map.js';
 import { LOOKS, CHAR_H, loadCharacters, charWidth, drawCharacter, drawPortrait } from './characters.js';
 import { CAT_H, loadCats, drawCat, drawCatPortrait } from './cats.js';
 import { ROLE_INFO } from './roles.js';
@@ -464,7 +464,7 @@ function doAction(targetId, action) {
 // reached from beside the furniture.
 function closeEnough(a, b) {
   const d = Math.hypot(b.x - a.x, b.y - a.y);
-  return d <= NEAR || (!isWalkable(b.x, b.y) && d <= 95);
+  return d <= NEAR || ((!!seatAt(b.x, b.y) || !isWalkable(b.x, b.y)) && d <= 95);
 }
 
 function stopFollowing() {
@@ -1329,8 +1329,7 @@ function drawPlayer(p, now) {
     if (ms < p.actionAnim.dur && !p.moving) action = { row: p.actionAnim.row, ms };
     else p.actionAnim = null;
   }
-  // Seats are on furniture, which isn't walkable floor.
-  drawCharacter(ctx, p.look, sx, p.y, p.dir, moving, p.pose, now, p.animT, { seated: !isWalkable(p.x, p.y), action });
+  drawCharacter(ctx, p.look, sx, p.y, p.dir, moving, p.pose, now, p.animT, { seated: !!seatAt(p.x, p.y), action });
 }
 
 function drawLabels(p, now) {

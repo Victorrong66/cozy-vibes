@@ -57,28 +57,36 @@ export const FURNITURE = [
 export const BLOCKERS = [
   { name: 'pillar by the front door', x1: 818, y1: 680, x2: 852, y2: 760 },
   { name: 'bed', x1: 930, y1: 115, x2: 1086, y2: 318 },
-  { name: 'couch', x1: 512, y1: 398, x2: 615, y2: 632 },
+  { name: 'couch', x1: 570, y1: 401, x2: 606, y2: 620 },
   { name: 'coffee table', x1: 394, y1: 438, x2: 478, y2: 590 },
   { name: 'dining table', x1: 572, y1: 190, x2: 734, y2: 335 },
   { name: 'TV and plants', x1: 222, y1: 340, x2: 286, y2: 606 },
   { name: 'office desk', x1: 1080, y1: 466, x2: 1252, y2: 550 },
   { name: 'desk chair', x1: 1146, y1: 500, x2: 1198, y2: 568 },
-  { name: 'bedroom dresser and plant', x1: 1260, y1: 114, x2: 1334, y2: 304 },
-  { name: 'living room bookshelf', x1: 240, y1: 174, x2: 352, y2: 260 },
+  { name: 'bedroom dresser and plant', x1: 1272, y1: 114, x2: 1334, y2: 320 },
+  { name: 'living room bookshelf', x1: 237, y1: 161, x2: 343, y2: 266 },
   { name: 'bedside table', x1: 859, y1: 128, x2: 918, y2: 186 },
-  { name: 'side table by the hall', x1: 762, y1: 336, x2: 801, y2: 406 },
+  { name: 'side table by the hall', x1: 758, y1: 336, x2: 807, y2: 404 },
   { name: 'plant by the hall', x1: 773, y1: 287, x2: 800, y2: 325 },
   { name: 'office plant by the desk', x1: 1027, y1: 474, x2: 1066, y2: 529 },
   { name: 'office bookshelf', x1: 1264, y1: 447, x2: 1347, y2: 551 },
   { name: 'office plant stand', x1: 1293, y1: 578, x2: 1348, y2: 613 },
-  { name: 'living room low shelf', x1: 336, y1: 699, x2: 560, y2: 739 },
+  { name: 'living room low shelf', x1: 332, y1: 710, x2: 561, y2: 737 },
   { name: 'office plant by the door', x1: 1021, y1: 661, x2: 1061, y2: 717 },
   { name: 'office corner plant', x1: 1297, y1: 680, x2: 1356, y2: 733 },
+  { name: 'couch arm (top)', x1: 512, y1: 401, x2: 606, y2: 426 },
+  { name: 'couch arm (bottom)', x1: 514, y1: 581, x2: 608, y2: 620 },
 ];
 
 // True when someone may stand here: on the floor, or in one of the seats.
 export function isValidSpot(x, y) {
   return isWalkable(x, y) || FURNITURE.some((f) => f.seats.some((s) => Math.abs(s.x - x) < 1 && Math.abs(s.y - y) < 1));
+}
+
+// The seat someone at (x, y) is sitting in, if any.
+export function seatAt(x, y) {
+  for (const f of FURNITURE) for (const s of f.seats) if (Math.abs(s.x - x) < 1 && Math.abs(s.y - y) < 1) return s;
+  return null;
 }
 
 export function furnitureAt(x, y) {
