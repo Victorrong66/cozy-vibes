@@ -14,6 +14,10 @@ const SPEED = 130; // world px per second
 const NEAR = 44; // how close you need to be to hug / high five
 const EMOTES = ['😀', '😂', '😍', '😮', '😢', '😡', '👍', '💤', '🎉', '❤️'];
 
+// Phones and tablets get a joystick; tapping the floor no longer walks there.
+const TOUCH = matchMedia('(pointer: coarse)').matches;
+if (TOUCH) document.body.classList.add('touch');
+
 const houseImg = new Image();
 houseImg.src = window.COZY_HOUSE_SRC || 'assets/house.png'; // the offline preview embeds it
 
@@ -24,6 +28,7 @@ const state = {
   effects: [], // floating emojis
   ripples: [], // tap markers
   zoomMul: 1,
+  camFree: false, // true after dragging the map; walking snaps back to following
   cats: new Map(), // id -> cat (run by the server)
 };
 
@@ -188,10 +193,16 @@ function onMessage(msg) {
       hideStatus();
       $('hud').classList.remove('hidden');
       $('bottomBar').classList.remove('hidden');
+      if (TOUCH) $('joystick').classList.remove('hidden');
       $('roomName').textContent = msg.room;
       updateCount();
       sendState(true);
-      if (!prev) toast(`Welcome home, ${profile.name}! Tap the floor to walk, tap someone to interact.`);
+      if (!prev)
+        toast(
+          TOUCH
+            ? `Welcome home, ${profile.name}! Use the joystick to walk, drag to look around.`
+            : `Welcome home, ${profile.name}! Click the floor to walk, drag to look around.`
+        );
       break;
     }
     case 'full':
@@ -670,14 +681,34 @@ addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
 
 let down = null;
+// One finger (or the mouse) on the map: a drag pans the view, a tap interacts.
 canvas.addEventListener('pointerdown', (e) => {
-  down = { x: e.clientX, y: e.clientY, t: performance.now() };
+  if (down) return; // ignore a second finger
+  down = { id: e.pointerId, x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, dragging: false };
+  try {
+    canvas.setPointerCapture(e.pointerId);
+  } catch {}
 });
+canvas.addEventListener('pointermove', (e) => {
+  if (!down || e.pointerId !== down.id) return;
+  if (!down.dragging && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) {
+    down.dragging = true;
+    state.camFree = true;
+    $('recenterBtn').classList.remove('hidden');
+  }
+  if (down.dragging) {
+    view.camX -= (e.clientX - down.lastX) / view.zoom;
+    view.camY -= (e.clientY - down.lastY) / view.zoom;
+  }
+  down.lastX = e.clientX;
+  down.lastY = e.clientY;
+});
+canvas.addEventListener('pointercancel', () => (down = null));
 canvas.addEventListener('pointerup', (e) => {
-  if (!down || !joined) return;
-  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+  if (!down || e.pointerId !== down.id) return;
+  const wasDrag = down.dragging;
   down = null;
-  if (moved > 20) return;
+  if (wasDrag || !joined) return;
   $('emoteTray').classList.add('hidden');
   if (document.activeElement === $('chatInput')) $('chatInput').blur();
   if (!$('actionMenu').classList.contains('hidden')) {
@@ -701,11 +732,56 @@ canvas.addEventListener('pointerup', (e) => {
     state.ripples.push({ x: w.x, y: w.y, t0: performance.now(), ok: true });
     return;
   }
+  if (TOUCH) return; // on phones you walk with the joystick
   me.pending = null;
   stopFollowing();
   walkTo(w.x, w.y);
   state.ripples.push({ x: w.x, y: w.y, t0: performance.now(), ok: !!me.path });
 });
+
+function followMe() {
+  state.camFree = false;
+  $('recenterBtn').classList.add('hidden');
+}
+$('recenterBtn').addEventListener('click', followMe);
+
+// ---- Joystick ----
+const joy = { x: 0, y: 0, id: null };
+const JOY_R = 46; // how far the knob travels, in px
+
+function setJoy(e) {
+  const r = $('joystick').getBoundingClientRect();
+  let dx = e.clientX - (r.left + r.width / 2);
+  let dy = e.clientY - (r.top + r.height / 2);
+  const d = Math.hypot(dx, dy);
+  if (d > JOY_R) {
+    dx = (dx / d) * JOY_R;
+    dy = (dy / d) * JOY_R;
+  }
+  joy.x = dx / JOY_R;
+  joy.y = dy / JOY_R;
+  $('joyKnob').style.transform = `translate(${dx}px, ${dy}px)`;
+}
+function releaseJoy() {
+  joy.x = joy.y = 0;
+  joy.id = null;
+  $('joyKnob').style.transform = '';
+  $('joystick').classList.remove('active');
+}
+$('joystick').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  joy.id = e.pointerId;
+  try {
+    $('joystick').setPointerCapture(e.pointerId);
+  } catch {}
+  $('joystick').classList.add('active');
+  closeMenu();
+  $('emoteTray').classList.add('hidden');
+  setJoy(e);
+});
+$('joystick').addEventListener('pointermove', (e) => e.pointerId === joy.id && setJoy(e));
+$('joystick').addEventListener('pointerup', (e) => e.pointerId === joy.id && releaseJoy());
+$('joystick').addEventListener('pointercancel', releaseJoy);
 
 function pickCat(wx, wy) {
   const pad = 6 / view.zoom;
@@ -735,6 +811,7 @@ function walkTo(x, y) {
   if (!mine) return;
   leaveSeat();
   me.goingToSeat = null;
+  followMe();
   me.path = findPath(mine.x, mine.y, x, y);
   if (me.path && mine.pose !== 'stand') {
     mine.pose = 'stand';
@@ -774,6 +851,14 @@ $('chatForm').addEventListener('submit', (e) => {
   $('chatInput').value = '';
   $('chatInput').blur();
 });
+$('chatBtn').addEventListener('click', () => {
+  releaseJoy();
+  $('emoteTray').classList.add('hidden');
+  document.body.classList.add('chatting');
+  $('chatInput').focus();
+});
+// Closing the keyboard (or sending) puts the joystick back.
+$('chatInput').addEventListener('blur', () => setTimeout(() => document.body.classList.remove('chatting'), 50));
 $('emoteBtn').addEventListener('click', () => $('emoteTray').classList.toggle('hidden'));
 for (const e of EMOTES) {
   const b = document.createElement('button');
@@ -818,8 +903,16 @@ function updateMe(dt, now) {
   if (keys.has('arrowright') || keys.has('d')) vx += 1;
   if (keys.has('arrowup') || keys.has('w')) vy -= 1;
   if (keys.has('arrowdown') || keys.has('s')) vy += 1;
+  let speedMul = 1;
+  const tilt = Math.hypot(joy.x, joy.y);
+  if (tilt > 0.18) {
+    vx = joy.x;
+    vy = joy.y;
+    speedMul = Math.min(1, Math.max(0.45, tilt * 1.2)); // push further to go faster
+  }
 
   if (vx || vy) {
+    if (state.camFree) followMe();
     leaveSeat();
     me.goingToSeat = null;
     me.path = null;
@@ -866,7 +959,7 @@ function updateMe(dt, now) {
   const moving = !!(vx || vy);
   if (moving) {
     const len = Math.hypot(vx, vy);
-    const step = Math.min(SPEED * dt, me.path && me.path[0] ? Math.hypot(me.path[0].x - mine.x, me.path[0].y - mine.y) : Infinity);
+    const step = Math.min(SPEED * speedMul * dt, me.path && me.path[0] ? Math.hypot(me.path[0].x - mine.x, me.path[0].y - mine.y) : Infinity);
     const n = moveWithCollision(mine.x, mine.y, (vx / len) * step, (vy / len) * step);
     const actuallyMoved = Math.hypot(n.x - mine.x, n.y - mine.y) > 0.01;
     mine.x = n.x;
@@ -953,8 +1046,16 @@ function updateCamera(dt) {
   // Keep the camera on the house; centre it when the view is larger than the house.
   const minX = 160 + halfW, maxX = 1400 - halfW;
   const minY = 10 + halfH, maxY = 900 - halfH;
-  const tx = minX > maxX ? (160 + 1400) / 2 : Math.min(maxX, Math.max(minX, target.x));
-  const ty = minY > maxY ? (10 + 900) / 2 : Math.min(maxY, Math.max(minY, target.y));
+  const clampX = (x) => (minX > maxX ? (160 + 1400) / 2 : Math.min(maxX, Math.max(minX, x)));
+  const clampY = (y) => (minY > maxY ? (10 + 900) / 2 : Math.min(maxY, Math.max(minY, y)));
+  if (state.camFree) {
+    // Looking around: stay where the finger left it, but keep the house in view.
+    view.camX = clampX(view.camX);
+    view.camY = clampY(view.camY);
+    return;
+  }
+  const tx = clampX(target.x);
+  const ty = clampY(target.y);
   const k = 1 - Math.exp(-dt * 6);
   view.camX += (tx - view.camX) * k;
   view.camY += (ty - view.camY) * k;

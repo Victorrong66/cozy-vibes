@@ -17,12 +17,14 @@
     <div class="pill" id="roomPill">🏡 <span id="roomName"></span> · <span id="playerCount">1</span> here</div>
     <button class="pill btn" id="inviteBtn">🔗 Invite</button>
     <div class="spacer"></div>
+    <button class="pill btn hidden" id="recenterBtn" aria-label="Back to my character">📍 Me</button>
     <button class="pill btn round" id="zoomOut" aria-label="Zoom out">−</button>
     <button class="pill btn round" id="zoomIn" aria-label="Zoom in">+</button>
   </div>
 
   <!-- Bottom bar -->
   <div id="bottomBar" class="hidden">
+    <button class="btn" id="chatBtn" aria-label="Chat">💬</button>
     <form id="chatForm" autocomplete="off">
       <input id="chatInput" maxlength="120" placeholder="Say something…" enterkeyhint="send" />
       <button class="btn primary" type="submit">Say</button>
@@ -30,6 +32,11 @@
     <button class="btn" id="emoteBtn" aria-label="Emotes">😀</button>
   </div>
   <div id="emoteTray" class="tray hidden"></div>
+
+  <!-- Joystick (phones and tablets) -->
+  <div id="joystick" class="hidden" aria-label="Move">
+    <div id="joyKnob"></div>
+  </div>
 
   <!-- Character action menu -->
   <div id="actionMenu" class="hidden" role="menu">

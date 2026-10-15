@@ -5,8 +5,11 @@ on phones and laptops alike.
 
 ## Playing
 
-- **Move:** tap or click anywhere on the floor and your character walks there, finding
-  its own way through the doors. On a keyboard you can also use WASD or the arrow keys.
+- **Move:** on a phone or tablet, use the joystick at the bottom of the screen (push it
+  further to walk faster). On a laptop, click the floor and your character walks there,
+  finding its own way through the doors, or use WASD / the arrow keys.
+- **Look around:** drag the map with your finger (or the mouse). Walking again, or
+  tapping **📍 Me**, brings the camera back to you.
 - **Interact:** tap any character to open their action menu: wave, high five, hug,
   send love, poke, dance together, follow, or walk over. Hugs, high fives, pokes and
   dances walk you over to the other person first.
@@ -19,8 +22,8 @@ on phones and laptops alike.
   hang out by people. Everyone in a house sees the same cats. Tap one to pet it, play
   with it, tease it (it swats and runs off) or call it over.
 - **Yourself:** tap your own character to sit, nap, dance, emote or change your look.
-- **Chat:** type in the box at the bottom (or press Enter on a keyboard). Messages
-  show up as speech bubbles.
+- **Chat:** tap 💬 (or press Enter on a keyboard) and type. Messages show up as speech
+  bubbles.
 - **Friends:** everyone who uses the same *house code* ends up in the same house.
   Press **Invite** to share the link.
 
