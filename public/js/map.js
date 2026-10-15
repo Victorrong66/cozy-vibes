@@ -60,6 +60,24 @@ export const BLOCKERS = [
   { name: 'desk chair', x1: 1146, y1: 500, x2: 1198, y2: 568 },
   { name: 'desk', x1: 1080, y1: 466, x2: 1252, y2: 550 },
   ...FURNITURE.filter((f) => f.id !== 'desk').map((f) => ({ name: f.name, ...f.rect })),
+  // Marked in red on art/no-walk-marks.jpg (tools/marks_to_blockers.py).
+  { name: 'bedroom dresser and plant', x1: 1260, y1: 114, x2: 1334, y2: 304 },
+  { name: 'living room bookshelf', x1: 240, y1: 174, x2: 352, y2: 260 },
+  { name: 'dining table (marked)', x1: 576, y1: 199, x2: 731, y2: 294 },
+  { name: 'bedside table', x1: 859, y1: 128, x2: 918, y2: 186 },
+  { name: 'bed (marked)', x1: 943, y1: 201, x2: 1070, y2: 282 },
+  { name: 'TV and plants', x1: 222, y1: 340, x2: 275, y2: 580 },
+  { name: 'side table by the hall', x1: 762, y1: 336, x2: 801, y2: 406 },
+  { name: 'plant by the hall', x1: 773, y1: 287, x2: 800, y2: 325 },
+  { name: 'coffee table (marked)', x1: 394, y1: 445, x2: 457, y2: 562 },
+  { name: 'couch (marked)', x1: 513, y1: 400, x2: 615, y2: 604 },
+  { name: 'office plant by the desk', x1: 1027, y1: 474, x2: 1066, y2: 529 },
+  { name: 'office desk (marked)', x1: 1092, y1: 471, x2: 1252, y2: 537 },
+  { name: 'office bookshelf', x1: 1264, y1: 447, x2: 1347, y2: 551 },
+  { name: 'office plant stand', x1: 1293, y1: 578, x2: 1348, y2: 613 },
+  { name: 'living room low shelf', x1: 336, y1: 699, x2: 560, y2: 739 },
+  { name: 'office plant by the door', x1: 1021, y1: 661, x2: 1061, y2: 717 },
+  { name: 'office corner plant', x1: 1297, y1: 680, x2: 1356, y2: 733 },
 ];
 
 // True when someone may stand here: on the floor, or in one of the seats.

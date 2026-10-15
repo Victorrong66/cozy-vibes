@@ -105,6 +105,13 @@ Coordinates are in pixels of `house.png` (1536×1024). Edit `AREAS` in `map.js` 
 where people can stand, add to `BLOCKERS` for solid furniture, or add to `FURNITURE` for things you can sit or lie on (each seat has an entry point that decides which side you get on from). Then run
 `npm run check`.
 
+### Marking no-walk areas on a picture
+
+Paint red over a copy of `public/assets/house.png` wherever characters shouldn't stand, save
+it as `art/no-walk-marks.jpg`, and run `python3 tools/marks_to_blockers.py`. It prints a
+rectangle for each marked area to paste into `BLOCKERS` in `public/js/map.js`, and writes
+`art/no-walk-check.png` so you can see them over the map.
+
 ### Characters
 
 The boy comes from `art/characters-sheet.png` (`tools/extract_sprites.py`). The girl and the
